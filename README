@@ -369,7 +369,7 @@ import exim
 
 # Wrap up the real scanning function in a tight
 # try-except block, dump any raised python
-# exceptions into the mainlog, and temporarily
+# exceptions into the paniclog, and temporarily
 # reject the message
 #
 def local_scan():
@@ -388,7 +388,7 @@ def local_scan():
     lines = traceback.format_exception(einfo[0], einfo[1], einfo[2])
     lines = ''.join(lines).split('\n')
     for line in lines:
-        exim.log(line)
+        exim.log(line, exim.LOG_PANIC)
 
     return exim.LOCAL_SCAN_TEMPREJECT
 ------------------------------------
