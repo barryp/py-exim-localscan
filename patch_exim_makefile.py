@@ -9,16 +9,22 @@ module, cross your fingers.
   2002-10-19 Barry Pederson <bp@barryp.org>
 
 """
-import distutils.sysconfig, os.path
+import distutils.sysconfig, os, os.path
 
-def patch_makefile(old_makefile, new_makefile):
-    makefile = open(old_makefile, 'r').readlines()
+
+SOURCE_FILE = 'expy_local_scan.c'
+
+
+def patch_makefile(source_dir, build_dir):
+    makefile_name = os.path.join(build_dir, 'Local', 'Makefile')
+    
+    makefile = open(makefile_name, 'r').readlines()
 
     cfg = distutils.sysconfig.get_config_var
     cflags = '-I%s %s' % (cfg('INCLUDEPY'), cfg('CFLAGSFORSHARED'))
     lib = os.path.join(cfg('LIBPL'), cfg('LIBRARY'))
     extralibs =  ' '.join([cfg('LIBM'), cfg('LIBS'), cfg('LDFLAGS'), lib, cfg('LINKFORSHARED')])
-    source = 'Local/expy_local_scan.c'
+    source = os.path.join('Local', SOURCE_FILE)
 
     #
     # Look for existing CFLAGS and EXTRALIBS lines, and append info.  
@@ -49,17 +55,26 @@ def patch_makefile(old_makefile, new_makefile):
     # Write out updated makefile
     #
     makefile = ''.join(makefile)
-    open(new_makefile, 'w').write(makefile)    
+    open(makefile_name, 'w').write(makefile)    
 
+    #
+    # Symlink in C sourcefile
+    #
+    os.symlink(os.path.join(source_dir, SOURCE_FILE), os.path.join(build_dir, 'Local', SOURCE_FILE))
+    
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print 'Attempt to patch Exim makefile to support Python local_scan'
-        print '    Usage: %s <original-makefile> <new-makefile>' % sys.argv[0]
+        print '    Usage: %s <build_dir>' % sys.argv[0]
         print ''
         print 'Suggested path for your local_scan module:'
         print '    ', os.path.join(distutils.sysconfig.get_python_lib(), 'exim_local_scan.py')
         sys.exit(1)
 
-    patch_makefile(sys.argv[1], sys.argv[2])
+    build_dir = sys.argv[1]
+    source_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
+
+    patch_makefile(source_dir, build_dir)
+
