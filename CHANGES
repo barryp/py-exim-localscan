@@ -1,3 +1,29 @@
+
+Version 4.20.2
+------------
+
+    Found a serious bug with my new custom header objects, they
+    were lacking the required C deallocation function, so
+    when they were being destroyed, Python would die with a 
+    signall 11 error.  Fortunately Exim could handle that 
+    situation and report a temporary error back to the client.
+
+    It was kind of a subtle problem in that you didn't see it
+    happen with single messages, but if a SMTP client attempted
+    to send more than one, it'd die on the second message as the
+    old headers were being replaced in the exim dictionary
+    by the new ones.
+
+    Dropped the backwards-compatibility stuff that allowed those
+    header objects to be accessessed as sequences.
+
+    Added some protection so that if you managed to hang onto
+    old header references after a message was done being processed,
+    and the underlying Exim structures were no longer present, 
+    trying to read their values didn't cause another signal 11 or
+    Python MemoryError.  Instead a less lethal AttributeError is raised.
+
+
 Version 4.20.1
 ------------
 

@@ -91,6 +91,12 @@ static void expy_header_line_dealloc(PyObject *self)
 
 static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
     {
+    if (self->hline == NULL)
+        {
+        PyErr_Format(PyExc_AttributeError, "Header object no longer valid, held over from previously processed message?");
+        return NULL;
+        }
+
     if (!strcmp(name, "text"))
         return PyString_FromString(self->hline->text);
 
@@ -107,6 +113,12 @@ static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
 
 static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObject *value)
     {
+    if (self->hline == NULL)
+        {
+        PyErr_Format(PyExc_AttributeError, "Header object no longer valid, held over from previously processed message?");
+        return NULL;
+        }
+
     if (!strcmp(name, "type"))
         {
         char *p;
@@ -364,6 +376,27 @@ static PyObject *get_headers()
     return result;
     }
 
+/*
+ * Given the header tuple created by get_headers(), go through
+ * and set the header objects to point to NULL, in case someone
+ * tries to re-use them after a message is done being processed, and
+ * the underlying header strings are no longer available 
+ */
+static void clear_headers(PyObject *header_tuple)
+    {
+    int i, n;
+
+    n = PyTuple_Size(header_tuple);
+    for (i = 0; i < n; i++)
+        {
+        expy_header_line_t *p;
+
+        p = (expy_header_line_t *) PyTuple_GetItem(header_tuple, i); /* Borrowed reference */
+        p->hline = NULL;
+        }
+
+    }
+
 
 /*
  * Make tuple containing message recipients
@@ -549,6 +582,7 @@ int local_scan(int fd, uschar **return_text)
         PyErr_Clear();
         *return_text = "Internal error, local_scan function failed";
         Py_DECREF(original_recipients);
+        clear_headers(header_tuple);
         Py_DECREF(header_tuple);
         return PYTHON_FAILURE_RETURN;
 
@@ -591,6 +625,8 @@ int local_scan(int fd, uschar **return_text)
 
     Py_XDECREF(working_recipients);   /* No longer needed */
     Py_DECREF(original_recipients);   /* No longer needed */
+
+    clear_headers(header_tuple);
     Py_DECREF(header_tuple);          /* No longer needed */
 
     /* Deal with the return value, first see if python returned a non-empty sequence */
