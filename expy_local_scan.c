@@ -83,6 +83,12 @@ typedef struct
     } expy_header_line_t;
 
 
+static void expy_header_line_dealloc(PyObject *self)
+    {
+    PyObject_Del(self);
+    }
+
+
 static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
     {
     if (!strcmp(name, "text"))
@@ -131,7 +137,7 @@ static PyTypeObject ExPy_Header_Line  =
     "ExPy Header Line",		/*tp_name*/
     sizeof(expy_header_line_t),	/*tp_size*/
     0,			        /*tp_itemsize*/
-    0,                          /*tp_dealloc*/
+    expy_header_line_dealloc,   /*tp_dealloc*/
     0,                          /*tp_print*/
     (getattrfunc) expy_header_line_getattr,  /*tp_getattr*/
     (setattrfunc) expy_header_line_setattr,  /*tp_setattr*/
@@ -333,16 +339,15 @@ static void expy_dict_int(char *key, int val)
 
 /*
  * Convert Exim header linked-list to Python tuple
- * of tuples.  Each inner tuple is 2 elements: header-text, and 
- * header-type, where header-type is a one-char code exim uses
- * to identify certain header lines (see chapter 48 of exim manual)
+ * of header objects.  
+ *
+ * Returns New reference
  */
-static void expy_get_headers()
+static PyObject *get_headers()
     {
     int header_count;  
     header_line *p;
     PyObject *result;
-    char linetype;
 
     /* count number of header lines */
     for (header_count = 0, p = header_list; p; p = p->next)
@@ -356,9 +361,7 @@ static void expy_get_headers()
         header_count++;
         }
 
-    /* Stick in dict and drop our reference */
-    PyDict_SetItemString(expy_exim_dict, "headers", result);
-    // Py_DECREF(result);  /* FIXME: Not sure why, but DECREFing this causes signal 11 failures */
+    return result;
     }
 
 
@@ -398,6 +401,7 @@ int local_scan(int fd, uschar **return_text)
     PyObject *user_dict;
     PyObject *user_func;
     PyObject *result;
+    PyObject *header_tuple;
     PyObject *original_recipients;
     PyObject *working_recipients;
 
@@ -522,7 +526,8 @@ int local_scan(int fd, uschar **return_text)
     expy_dict_int("D_local_scan", D_local_scan);
 
     /* set the headers */
-    expy_get_headers();
+    header_tuple = get_headers();
+    PyDict_SetItemString(expy_exim_dict, "headers", header_tuple);
 
     /* 
      * make list of recipients, give module a copy to work with in 
@@ -544,6 +549,7 @@ int local_scan(int fd, uschar **return_text)
         PyErr_Clear();
         *return_text = "Internal error, local_scan function failed";
         Py_DECREF(original_recipients);
+        Py_DECREF(header_tuple);
         return PYTHON_FAILURE_RETURN;
 
         // FIXME: should write exception to exim log somehow
@@ -585,6 +591,7 @@ int local_scan(int fd, uschar **return_text)
 
     Py_XDECREF(working_recipients);   /* No longer needed */
     Py_DECREF(original_recipients);   /* No longer needed */
+    Py_DECREF(header_tuple);          /* No longer needed */
 
     /* Deal with the return value, first see if python returned a non-empty sequence */
     if (PySequence_Check(result) && (PySequence_Size(result) > 0))
