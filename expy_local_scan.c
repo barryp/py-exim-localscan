@@ -110,7 +110,7 @@ static PyObject * expy_header_line_item(expy_header_line_t *self, int i)
     }
 
 
-static int expy_header_line_ass(expy_header_line_t *self, int i, PyObject *value)
+static int expy_header_line_assign(expy_header_line_t *self, int i, PyObject *value)
     {
     char *p;
     int len;
@@ -148,7 +148,7 @@ static PySequenceMethods header_line_as_sequence =
     0,
     (intargfunc) expy_header_line_item,
     0,
-    (intobjargproc) expy_header_line_ass,
+    (intobjargproc) expy_header_line_assign,
     };
 
 
@@ -351,7 +351,6 @@ static PyObject *expy_log_write(PyObject *self, PyObject *args)
 static PyObject *expy_debug_print(PyObject *self, PyObject *args)
     {
     char *str;
-    int which = LOG_MAIN;
     
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
@@ -501,8 +500,10 @@ int local_scan(int fd, uschar **return_text)
             sys_module = PyImport_ImportModule("sys");
             if (!sys_module)
                 {
+                PyErr_Clear();
                 *return_text = "Internal error, can't import Python sys module";
                 log_write(0, LOG_REJECT, "Couldn't import Python 'sys' module"); 
+                /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
 
@@ -512,8 +513,10 @@ int local_scan(int fd, uschar **return_text)
             sys_path = PyMapping_GetItemString(sys_dict, "path");
             if (!sys_path || (!PyList_Check(sys_path)))
                 {
+                PyErr_Clear();  /* in case sys_path was NULL, harmless otherwise */
                 *return_text = "Internal error, sys.path doesn't exist or isn't a list";
                 log_write(0, LOG_REJECT, "Python sys.path doesn't exist or isn't a list"); 
+                /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
 
@@ -527,7 +530,8 @@ int local_scan(int fd, uschar **return_text)
 
         if (!expy_user_module)
             {
-            *return_text = "Internal error, missing module";
+            PyErr_Clear();
+            *return_text = "Internal error, can't import Python local_scan module";
             log_write(0, LOG_REJECT, "Couldn't import Python '%s' module", expy_scan_module); 
             return PYTHON_FAILURE_RETURN;
             }
@@ -538,7 +542,8 @@ int local_scan(int fd, uschar **return_text)
     user_func = PyMapping_GetItemString(user_dict, expy_scan_function);
     if (!user_func)
         {
-        *return_text = "Internal error, missing function";
+        PyErr_Clear();
+        *return_text = "Internal error, module doesn't have local_scan function";
         log_write(0, LOG_REJECT, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function); 
         return PYTHON_FAILURE_RETURN;
         }
