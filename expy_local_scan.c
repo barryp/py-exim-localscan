@@ -55,6 +55,121 @@ static PyObject *expy_exim_dict = NULL;
 static PyObject *expy_user_module = NULL;
 
 
+/* ------- Custom type for holding header lines ------ 
+
+  Basically a two-item sequence in which only the second item (the header line type)
+  is changeable, and even then, limited to single-character strings
+
+*/
+
+typedef struct
+	{
+	PyObject_HEAD
+	header_line *hline;
+	} expy_header_line_t;
+
+
+/* Header lines are always 2 items long (value, type) */
+static int expy_header_line_length(PyListObject *a)
+	{
+        return 2;
+	}
+
+
+static PyObject * expy_header_line_item(expy_header_line_t *x, int i)
+	{
+	char ch;
+
+	switch (i)
+		{
+		case 0:
+			return PyString_FromString(x->hline->text);
+
+		case 1:
+			ch = (char)(x->hline->type);
+			return PyString_FromStringAndSize(&ch, 1);
+
+		default:
+	                PyErr_SetString(PyExc_IndexError, "list index out of range");
+			return NULL;
+		}
+	}
+
+
+static int expy_header_line_ass(expy_header_line_t *x, int i, PyObject *v)
+	{
+	char *p;
+	int len;
+
+	switch (i)
+		{
+		case 0:
+	                PyErr_SetString(PyExc_TypeError, "value of header line can't be changed");
+			return -1;
+
+		case 1:
+			if (PyString_AsStringAndSize(v, &p, &len) == -1)
+				return -1;
+
+			if (len != 1)
+				{
+		                PyErr_SetString(PyExc_TypeError, "type of header line must be single character");
+				return -1;
+				}
+
+			x->hline->type = (int)(p[0]);
+			return 0;
+
+		default:
+	                PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
+			return -1;
+		}
+	}
+
+ 
+static PySequenceMethods header_line_as_sequence =
+	{
+	(inquiry) expy_header_line_length,
+	0,
+	0,
+	(intargfunc) expy_header_line_item,
+	0,
+	(intobjargproc) expy_header_line_ass,
+	};
+
+
+static PyTypeObject ExPy_Header_Line  = 
+	{
+	PyObject_HEAD_INIT(&PyType_Type) 
+	0,				/*ob_size*/
+	"ExPy Header Line",		/*tp_name*/
+	sizeof(expy_header_line_t),	/*tp_size*/
+	0,			        /*tp_itemsize*/
+	0,    				/*tp_dealloc*/
+    	0,                              /*tp_print*/
+	0,    				/*tp_getattr*/
+	0,    				/*tp_setattr*/
+	0,			        /*tp_compare*/
+	0,                              /*tp_repr*/
+   	0,				/*tp_as_number*/
+	&header_line_as_sequence	/*tp_as_sequence*/
+	};
+
+
+PyObject * expy_create_header_line(header_line *p)
+	{
+	expy_header_line_t * result;
+
+	result = (expy_header_line_t *) PyObject_NEW(expy_header_line_t, &ExPy_Header_Line);
+        if (!result)
+		return NULL;
+
+	result->hline = p;
+
+        return (PyObject *) result;
+	}
+
+
 /* ------- Helper functions for Module methods ------- */
 
 /*
@@ -246,7 +361,6 @@ static void expy_get_headers()
     int header_count;  
     header_line *p;
     PyObject *result;
-    PyObject *line;
     char linetype;
 
     /* count number of header lines */
@@ -257,11 +371,7 @@ static void expy_get_headers()
     result = PyTuple_New(header_count);
     for (header_count = 0, p = header_list; p; p = p->next)
         {
-        line = PyTuple_New(2);
-        PyTuple_SetItem(line, 0, PyString_FromString(p->text));
-        linetype = (char) (p->type);
-        PyTuple_SetItem(line, 1, PyString_FromStringAndSize(&linetype, 1));
-        PyTuple_SetItem(result, header_count, line);
+        PyTuple_SetItem(result, header_count, expy_create_header_line(p));
         header_count++;
         }
 
