@@ -138,10 +138,22 @@ altered for Python)
 
         add_header(string):
 
-            Adds a header line to the message being scanned.  A newline
+            Adds a header to the message being scanned.  A newline
             is automatically added if necessary. Example:
 
                 exim.add_header('X-Python: scanned')
+
+            Please note that a header that's been folded into multiple
+            lines of text must be added with a single function call. 
+
+            For example, instead of:
+ 
+                exim.add_header('x-foo: bar')
+                exim.add_header(' baz')
+
+            you'd need to use:
+
+                exim.add_header('x-foo: bar\n baz')
 
 
         debug_print(string):
