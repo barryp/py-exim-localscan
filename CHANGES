@@ -9,7 +9,9 @@ Version 4.41.0
     Updated the README file to give a few more examples, and
     remove the paragraph about being able to access header 
     objects as sequences (which actually stopped working
-    in the last version).  
+    in the last version).  Updated the example that catches
+    and logs exceptions to have it write to the Exim paniclog
+    instead of the mainlog.
 
     Updated the README.FreeBSD to use more modern version
     numbers in the examples.
