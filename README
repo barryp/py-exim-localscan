@@ -1,0 +1,255 @@
+Python Local Scan for Exim
+===========================
+
+    2002-10-19   Barry Pederson <bp@barryp.org>
+
+This software embeds a Python interpreter into Exim 4.x, for running a 
+Python-based local_scan function against incoming messages.
+
+---------
+COMPILING
+---------
+First, make sure you can build and run a plain Exim installation before 
+attempting to add Python support.  Start by reading the toplevel Exim 
+README file.  
+
+Embedding Perl into Exim may cause linking conflicts with Python, you've 
+been warned.
+
+Once you've successfully built Exim, you may try patching the Exim 
+Local/Makefile by running the patch_exim_makefile.py script included in 
+this distribution.  The script takes one argument, the path to your
+toplevel Exim build directory (that contains the "Local" directory the
+Exim install docs told you to create).  The script will patch the Local/Makefile
+and symlink the C sourcefile for the local_scan function (which should live
+in the same directory as the patch script).
+
+The expy_local_scan.c file has a few "tweakable settings" near the the
+top of the file.  The defaults should work fine, but if you want to use
+different Python module or function names, this is where you'd change them.
+
+Rebuild Exim using the patched Makefile, if you don't see any errors then
+you should be in business.  Install the new binary the same way as you did
+with plain Exim.
+
+----------
+RUNNING
+----------
+(this part assumes you're using the default 'tweakable settings' 
+in expy_local_scan.c)
+
+For every message that comes in, Exim will now call on embedded Python
+to import a module named 'exim_local_scan', and run a function in that 
+module named 'local_scan'.  
+
+You need to supply an exim_local_scan.py file somewhere in your Python 
+path. The Python 'site-packages' directory is a good place.  Running the 
+patch_exim_makefile.py script without any args will print a suggested 
+pathname for your module.
+
+Here is a sample "hello world" local scan module for Python:
+
+------------
+import exim
+
+def local_scan():
+    exim.log('Hello from Python')
+    return exim.LOCAL_SCAN_ACCEPT
+
+------------
+
+If this works, you'll find a "Hello from Python" line added to each 
+message entry in your Exim mainlog.
+
+
+------------------------------------
+WRITING A PYTHON LOCAL_SCAN FUNCTION
+------------------------------------
+
+Your "local_scan" function is called without any arguments, and should
+return one of the LOCAL_SCAN_* constants (see below).  If you want to specify
+some return_text, you may do so by returning a tuple containing the 
+LOCAL_SCAN_* constant, along with a string.  For example:
+
+    def local_scan():
+        return exim.LOCAL_SCAN_TEMPREJECT, 'Come back later'
+
+Several Exim functions, constants, and variables are available through
+a module named 'exim', which user-supplied modules will want to import
+(as in the "hello world" example above).  (Most of these descriptions
+are basically copied from the Exim Local Scan documentation chapter 38, but
+altered for Python)
+
+    Functions
+    ----------
+
+        add_header(string):
+
+            Adds a header line to the message being scanned.  A newline
+            is automatically added if necessary. Example:
+
+                exim.add_header('X-Python: scanned')
+
+        expand(string):
+
+            Perform an Exim string-expansion.  For example:
+
+                spooldir = exim.expand('$spool_directory')
+        
+        log(string [, which=LOG_MAIN]):
+
+            Add a string to the specified log (defaults to LOG_MAIN). 
+            For example:
+
+                exim.log('Scanned by Python')
+                exim.log('Rejected by Python', exim.LOG_REJECT)
+
+
+    Constants
+    ----------
+    (Python doesn't really have constants, you can assign other values to 
+     these names if you really want to confuse yourself)
+
+        LOG_MAIN
+        LOG_REJECTLOG
+            Used as the second argument to the log() function to specify
+            which Exim log you want to write to.  Example:
+
+                exim.log('Python was here', exim.LOG_MAIN)
+
+        LOCAL_SCAN_ACCEPT
+        LOCAL_SCAN_REJECT
+        LOCAL_SCAN_TEMPREJECT
+            Used one of these for the return value of your local scan function
+         
+
+    Variables
+    ----------        
+
+        fd                  (an integer)
+
+            The file descriptor for the file that contains the body of the 
+            message (the -D file). The descriptor is positioned at character 17 
+            of the file, which is the first character of the body itself, 
+            because the first 17 characters are the message id followed by a 
+            newline. The file is open for reading and writing, but updating it 
+            is not recommended.
+
+            Here is an example snippet of code that copies the body of the 
+            message being scanned to a file named 'my_body':
+
+                import os
+                f = open('my_body', 'w')
+                while 1:
+                    s = os.read(exim.fd, 16384)
+                    if not s:
+                        break
+                    f.write(s)   
+        
+        sender_address      (a string)
+
+            The envelope sender address. For bounce messages this is 
+            the empty string.
+
+        header_list
+
+            A tuple of tuples.  Each inner tuple represents a header line and
+            is made up of 2 elements: (header-text, header-type) where 
+            header-type is the one-char code exim uses to identify certain 
+            header lines (see chapter 48 of exim manual).  You can't modify
+            this list directly - use the add_header() function (see above) to 
+            add new header lines.
+
+        interface_address   (a string)
+
+            The IP address of the interface that received the message, as 
+            a string.  This is None for locally submitted messages.
+
+        interface_port      (an integer)
+
+            The port on which this message was received.
+
+        received_protocol   (a string)
+
+            The name of the protocol by which the message was received.
+
+        recipients_list
+
+            The list of accepted recipients.  You may modify or replace
+            this list.  To blackhole a message you can use any of these 
+            methods:
+
+                exim.recipients_list = None
+                exim.recipients_list = []
+                del exim.recipients_list
+
+            You could append a new address with:
+
+                exim.recipients_list.append('postmaster@foobar.com')
+
+            Or replace the list alltogether with:
+
+                exim.recipients_list = ['quarantine@foobar.com', 'postmaster@foobar.com']
+
+        sender_host_address         (a string)
+
+            The IP address of the sending host, as a string. This is None for 
+            locally-submitted messages.
+
+        sender_host_authenticated   (a string)
+
+            The name of the authentication mechanism that was used, or None if 
+            the message was not received over an authenticated SMTP connection.
+
+        sender_host_name            (a string)
+
+            The name of the sending host, if known.
+
+        sender_host_port            (an integer)
+
+            The port on the sending host.        
+
+
+Please note that the 'recipients_list' variable is the only one for which
+modifications have any effect on Exim.  
+
+------------------------
+MORE ELABORATE EXAMPLE
+------------------------
+
+Here is a fancier local_scan function, that calls a 
+'scanner' module stored outside the normal Python path, and
+catches any exceptions raised and logs them in the Exim rejectlog
+
+-----------------------------------
+import sys
+import exim
+
+# Wrap up the real scanning function in a tight
+# try-except block, dump any raised python
+# exceptions into the mainlog, and temporarily
+# reject the message
+#
+def local_scan():
+    try:
+        sys.path.append('/usr/local/etc/exim/local_scan')
+        import scanner
+        return scanner.local_scan()
+    except:
+        pass
+
+    #
+    # Get the exception and traceback, format and convert
+    # to individual lines, feed each line into exim log
+    #
+    import traceback
+    einfo = sys.exc_info()
+    lines = traceback.format_exception(einfo[0], einfo[1], einfo[2])
+    lines = ''.join(lines).split('\n')
+    for line in lines:
+        exim.log(line)
+
+    return exim.LOCAL_SCAN_TEMPREJECT
+------------------------------------
+
+### EOF ###                    

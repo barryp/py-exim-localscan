@@ -1,0 +1,19 @@
+Since I'm a FreeBSD user, I can provide some additional notes
+on how I built Exim-Python on this platform, using the FreeBSD
+Exim port.  
+
+This assumes Python has already been installed, and that
+this distribution was unpacked into /home/barryp/py-exim-localscan-1.0
+(obviously adjust that for whatever you do on your box)
+
+-----------------
+cd /usr/ports/mail/exim
+make WITHOUT_PERL=yes WITHOUT_EXISCAN=yes configure
+/home/barryp/py-exim-localscan-1.0/patch_exim_makefile.py work/exim-4.10
+make WITHOUT_PERL=yes WITHOUT_EXISCAN=yes install
+ 
+# watch Exim compile, keep an eye out for errors, especially link
+# errors at the end
+#
+# If all goes well, it will install in /usr/local/sbin   
+-----------------
