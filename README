@@ -271,7 +271,7 @@ altered for Python)
             The envelope sender address. For bounce messages this is 
             the empty string.
 
-        header_list
+        headers
 
             A tuple of header_line objects.  Each header_line object has two 
             attributes: '.text', and '.type'.  
@@ -316,23 +316,23 @@ altered for Python)
 
             The name of the protocol by which the message was received.
 
-        recipients_list
+        recipients
 
             The list of accepted recipients.  You may modify or replace
             this list.  To blackhole a message you can use any of these 
             methods:
 
-                exim.recipients_list = None
-                exim.recipients_list = []
-                del exim.recipients_list
+                exim.recipients = None
+                exim.recipients = []
+                del exim.recipients
 
             You could append a new address with:
 
-                exim.recipients_list.append('postmaster@foobar.com')
+                exim.recipients.append('postmaster@foobar.com')
 
             Or replace the list alltogether with:
 
-                exim.recipients_list = ['quarantine@foobar.com', 'postmaster@foobar.com']
+                exim.recipients = ['quarantine@foobar.com', 'postmaster@foobar.com']
 
         sender_host_address         (a string)
 
@@ -353,7 +353,7 @@ altered for Python)
             The port on the sending host.        
 
 
-Please note that the 'recipients_list' variable is the only one for which
+Please note that the 'recipients' variable is the only one for which
 modifications have any effect on Exim.  
 
 ------------------------
