@@ -1,6 +1,22 @@
+Version 4.41.0
+--------------
+    Workaround problem preventing compiling on Cygwin using
+    GCC.  No changes to the functionality at all.  
+
+    Added a README.Cygwin to mention what to do if the correct
+    library to link to isn't found on Cygwin.
+
+    Updated the README file to give a few more examples, and
+    remove the paragraph about being able to access header 
+    objects as sequences (which actually stopped working
+    in the last version).  
+
+    Updated the README.FreeBSD to use more modern version
+    numbers in the examples.
+
 
 Version 4.20.2
-------------
+--------------
 
     Found a serious bug with my new custom header objects, they
     were lacking the required C deallocation function, so
