@@ -63,111 +63,153 @@ static PyObject *expy_user_module = NULL;
 */
 
 typedef struct
-	{
-	PyObject_HEAD
-	header_line *hline;
-	} expy_header_line_t;
+    {
+    PyObject_HEAD
+    header_line *hline;
+    } expy_header_line_t;
 
 
 /* Header lines are always 2 items long (value, type) */
 static int expy_header_line_length(PyListObject *a)
-	{
-        return 2;
-	}
+    {
+    return 2;
+    }
 
 
-static PyObject * expy_header_line_item(expy_header_line_t *x, int i)
-	{
-	char ch;
+static PyObject * expy_header_line_item(expy_header_line_t *self, int i)
+    {
+    char ch;
 
-	switch (i)
-		{
-		case 0:
-			return PyString_FromString(x->hline->text);
+    switch (i)
+        {
+        case 0:
+            return PyString_FromString(self->hline->text);
 
-		case 1:
-			ch = (char)(x->hline->type);
-			return PyString_FromStringAndSize(&ch, 1);
+        case 1:
+            ch = (char)(self->hline->type);
+            return PyString_FromStringAndSize(&ch, 1);
 
-		default:
-	                PyErr_SetString(PyExc_IndexError, "list index out of range");
-			return NULL;
-		}
-	}
+        default:
+	    PyErr_SetString(PyExc_IndexError, "list index out of range");
+            return NULL;
+        }
+    }
 
 
-static int expy_header_line_ass(expy_header_line_t *x, int i, PyObject *v)
-	{
-	char *p;
-	int len;
+static int expy_header_line_ass(expy_header_line_t *self, int i, PyObject *value)
+    {
+    char *p;
+    int len;
 
-	switch (i)
-		{
-		case 0:
-	                PyErr_SetString(PyExc_TypeError, "value of header line can't be changed");
-			return -1;
+    switch (i)
+        {
+        case 0:
+	    PyErr_SetString(PyExc_TypeError, "value of header line can't be changed");
+            return -1;
 
-		case 1:
-			if (PyString_AsStringAndSize(v, &p, &len) == -1)
-				return -1;
+        case 1:
+            if (PyString_AsStringAndSize(value, &p, &len) == -1)
+                return -1;
 
-			if (len != 1)
-				{
-		                PyErr_SetString(PyExc_TypeError, "type of header line must be single character");
-				return -1;
-				}
+            if (len != 1)
+                {
+		PyErr_SetString(PyExc_TypeError, "type of header line must be single character");
+                return -1;
+                }
 
-			x->hline->type = (int)(p[0]);
-			return 0;
+            self->hline->type = (int)(p[0]);
+            return 0;
 
-		default:
-	                PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
-			return -1;
-		}
-	}
+        default:
+	    PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
+            return -1;
+        }
+    }
 
  
 static PySequenceMethods header_line_as_sequence =
-	{
-	(inquiry) expy_header_line_length,
-	0,
-	0,
-	(intargfunc) expy_header_line_item,
-	0,
-	(intobjargproc) expy_header_line_ass,
-	};
+    {
+    (inquiry) expy_header_line_length,
+    0,
+    0,
+    (intargfunc) expy_header_line_item,
+    0,
+    (intobjargproc) expy_header_line_ass,
+    };
+
+
+
+static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
+    {
+    if (!strcmp(name, "text"))
+        return PyString_FromString(self->hline->text);
+
+    if (!strcmp(name, "type"))
+        {
+        char ch = (char)(self->hline->type);
+        return PyString_FromStringAndSize(&ch, 1);
+        }
+
+    PyErr_Format(PyExc_AttributeError, "Unknown attribute: %s", name);
+    return NULL;
+    }
+
+
+static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObject *value)
+    {
+    if (!strcmp(name, "type"))
+        {
+        char *p;
+        int len;
+
+        if (PyString_AsStringAndSize(value, &p, &len) == -1)
+            return -1;
+
+        if (len != 1)
+            {
+            PyErr_SetString(PyExc_TypeError, "header.type can only be set to a single-character value");
+            return -1;
+            }
+
+        self->hline->type = (int)(p[0]);
+        return 0;
+        }
+
+    PyErr_Format(PyExc_AttributeError, "Attribute: %s is not settable", name);
+    return -1;
+    }
 
 
 static PyTypeObject ExPy_Header_Line  = 
-	{
-	PyObject_HEAD_INIT(&PyType_Type) 
-	0,				/*ob_size*/
-	"ExPy Header Line",		/*tp_name*/
-	sizeof(expy_header_line_t),	/*tp_size*/
-	0,			        /*tp_itemsize*/
-	0,    				/*tp_dealloc*/
-    	0,                              /*tp_print*/
-	0,    				/*tp_getattr*/
-	0,    				/*tp_setattr*/
-	0,			        /*tp_compare*/
-	0,                              /*tp_repr*/
-   	0,				/*tp_as_number*/
-	&header_line_as_sequence	/*tp_as_sequence*/
-	};
+    {
+    PyObject_HEAD_INIT(&PyType_Type) 
+    0,				/*ob_size*/
+    "ExPy Header Line",		/*tp_name*/
+    sizeof(expy_header_line_t),	/*tp_size*/
+    0,			        /*tp_itemsize*/
+    0,                          /*tp_dealloc*/
+    0,                          /*tp_print*/
+    (getattrfunc) expy_header_line_getattr,  /*tp_getattr*/
+    (setattrfunc) expy_header_line_setattr,  /*tp_setattr*/
+    0,			        /*tp_compare*/
+    0,                          /*tp_repr*/
+    0,				/*tp_as_number*/
+    &header_line_as_sequence	/*tp_as_sequence*/
+    };
 
 
 PyObject * expy_create_header_line(header_line *p)
-	{
-	expy_header_line_t * result;
+    {
+    expy_header_line_t * result;
 
-	result = (expy_header_line_t *) PyObject_NEW(expy_header_line_t, &ExPy_Header_Line);
-        if (!result)
-		return NULL;
+    result = (expy_header_line_t *) PyObject_NEW(expy_header_line_t, &ExPy_Header_Line);
+    if (!result)
+        return NULL;
 
-	result->hline = p;
+    result->hline = p;
 
-        return (PyObject *) result;
-	}
+    return (PyObject *) result;
+    }
 
 
 /* ------- Helper functions for Module methods ------- */
