@@ -144,11 +144,11 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
 
 static PyTypeObject ExPy_Header_Line  = 
     {
-    PyObject_HEAD_INIT(&PyType_Type) 
-    0,				/*ob_size*/
-    "ExPy Header Line",		/*tp_name*/
-    sizeof(expy_header_line_t),	/*tp_size*/
-    0,			        /*tp_itemsize*/
+    PyObject_HEAD_INIT(NULL)    /* Workaround problem with Cygwin/GCC, by setting to &PyType_Type at runtime */
+    0,                          /*ob_size*/
+    "ExPy Header Line",         /*tp_name*/
+    sizeof(expy_header_line_t), /*tp_size*/
+    0,                          /*tp_itemsize*/
     expy_header_line_dealloc,   /*tp_dealloc*/
     0,                          /*tp_print*/
     (getattrfunc) expy_header_line_getattr,  /*tp_getattr*/
@@ -442,7 +442,10 @@ int local_scan(int fd, uschar **return_text)
         return LOCAL_SCAN_ACCEPT;
 
     if (!Py_IsInitialized())  /* local_scan() may have already been run */
+        {
         Py_Initialize();
+        ExPy_Header_Line.ob_type = &PyType_Type;
+        }
 
     if (!expy_exim_dict)
         {

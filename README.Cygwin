@@ -1,0 +1,19 @@
+It's been reported* that this software can be compiled on Cygwin with GCC,
+although the patch_exim_makefile.py script doesn't quite come up with
+the correct library name for linking in Python.
+
+Since I'm not sure if that's a Cygwin bug that'll be fixed someday, I'll 
+leave the patch script alone for now.  But if you have problems linking,
+try altering the patched Makefile - look for something like:
+
+  EXTRALIBS=-lm   /usr/lib/python2.3/config/libpython2.3.a
+
+and replace the '.a' extension of the library name with '.dll.a',
+for example:
+
+  EXTRALIBS=-lm   /usr/lib/python2.3/config/libpython2.3.dll.a
+
+
+----------
+ * Thanks to Martin Duffy for figuring this out.
+
