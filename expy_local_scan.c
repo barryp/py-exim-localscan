@@ -1,14 +1,6 @@
 /*
  * Python wrapper for Exim local_scan feature
  *
- * Building on FreeBSD 4.x:  edit Local/Makefile
- * and add these lines (if already have CFLAGS/EXTRALIBS, just append this stuff)
- * 
- *  LOCAL_SCAN_SOURCE=Local/expy_local_scan.c
- *  CFLAGS= -I/usr/local/include/python2.2
- *  EXTRALIBS= -lm -lutil -pthread /usr/local/lib/python2.2/config/libpython2.2.a -Wl,--export-dynamic
- * 
- *
  * 2002-10-20  Barry Pederson <bp@barryp.org>
  *
  */
@@ -57,8 +49,12 @@ static PyObject *expy_user_module = NULL;
 
 /* ------- Custom type for holding header lines ------ 
 
-  Basically a two-item sequence in which only the second item (the header line type)
-  is changeable, and even then, limited to single-character strings
+  Basically an object with .text and .type attributes, only the
+  .type attribute is changable, and only to single-character 
+  values.  Usually it'd be '*' which Exim interprets as 
+  meaning the line should be deleted.
+
+  Also accessible for backwards compatibility as a sequence
 
 */
 
