@@ -83,76 +83,6 @@ typedef struct
     } expy_header_line_t;
 
 
-/* Header lines are always 2 items long (value, type) */
-static int expy_header_line_length(PyListObject *a)
-    {
-    return 2;
-    }
-
-
-static PyObject * expy_header_line_item(expy_header_line_t *self, int i)
-    {
-    char ch;
-
-    switch (i)
-        {
-        case 0:
-            return PyString_FromString(self->hline->text);
-
-        case 1:
-            ch = (char)(self->hline->type);
-            return PyString_FromStringAndSize(&ch, 1);
-
-        default:
-	    PyErr_SetString(PyExc_IndexError, "list index out of range");
-            return NULL;
-        }
-    }
-
-
-static int expy_header_line_assign(expy_header_line_t *self, int i, PyObject *value)
-    {
-    char *p;
-    int len;
-
-    switch (i)
-        {
-        case 0:
-	    PyErr_SetString(PyExc_TypeError, "value of header line can't be changed");
-            return -1;
-
-        case 1:
-            if (PyString_AsStringAndSize(value, &p, &len) == -1)
-                return -1;
-
-            if (len != 1)
-                {
-		PyErr_SetString(PyExc_TypeError, "type of header line must be single character");
-                return -1;
-                }
-
-            self->hline->type = (int)(p[0]);
-            return 0;
-
-        default:
-	    PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
-            return -1;
-        }
-    }
-
- 
-static PySequenceMethods header_line_as_sequence =
-    {
-    (inquiry) expy_header_line_length,
-    0,
-    0,
-    (intargfunc) expy_header_line_item,
-    0,
-    (intobjargproc) expy_header_line_assign,
-    };
-
-
-
 static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
     {
     if (!strcmp(name, "text"))
@@ -205,10 +135,6 @@ static PyTypeObject ExPy_Header_Line  =
     0,                          /*tp_print*/
     (getattrfunc) expy_header_line_getattr,  /*tp_getattr*/
     (setattrfunc) expy_header_line_setattr,  /*tp_setattr*/
-    0,			        /*tp_compare*/
-    0,                          /*tp_repr*/
-    0,				/*tp_as_number*/
-    &header_line_as_sequence	/*tp_as_sequence*/
     };
 
 
@@ -216,7 +142,7 @@ PyObject * expy_create_header_line(header_line *p)
     {
     expy_header_line_t * result;
 
-    result = (expy_header_line_t *) PyObject_NEW(expy_header_line_t, &ExPy_Header_Line);
+    result = PyObject_NEW(expy_header_line_t, &ExPy_Header_Line);  /* New Reference */
     if (!result)
         return NULL;
 
@@ -423,16 +349,16 @@ static void expy_get_headers()
         header_count++;
 
     /* Build up the tuple of tuples */
-    result = PyTuple_New(header_count);
+    result = PyTuple_New(header_count);           /* New reference */
     for (header_count = 0, p = header_list; p; p = p->next)
         {
-        PyTuple_SetItem(result, header_count, expy_create_header_line(p));
+        PyTuple_SetItem(result, header_count, expy_create_header_line(p));   /* Steals new reference */
         header_count++;
         }
 
     /* Stick in dict and drop our reference */
     PyDict_SetItemString(expy_exim_dict, "headers", result);
-    Py_DECREF(result);
+    // Py_DECREF(result);  /* FIXME: Not sure why, but DECREFing this causes signal 11 failures */
     }
 
 
@@ -478,14 +404,15 @@ int local_scan(int fd, uschar **return_text)
     if (!expy_enabled)
         return LOCAL_SCAN_ACCEPT;
 
-    if (!Py_IsInitialized())  /* maybe some other exim add-on already initialized Python? */
+    if (!Py_IsInitialized())  /* local_scan() may have already been run */
         Py_Initialize();
 
     if (!expy_exim_dict)
         {
-        PyObject *module = Py_InitModule(expy_exim_module, expy_exim_methods); /* borrowed ref */
-        expy_exim_dict = PyModule_GetDict(module);         /* borrowed ref */
-        Py_INCREF(expy_exim_dict);                         /* want to keep it for later */
+        PyObject *module = Py_InitModule(expy_exim_module, expy_exim_methods); /* Borrowed reference */
+        Py_INCREF(module);                                 /* convert to New reference */
+        expy_exim_dict = PyModule_GetDict(module);         /* Borrowed reference */
+        Py_INCREF(expy_exim_dict);                         /* convert to New reference */
         }
 
     if (!expy_user_module)
@@ -497,7 +424,7 @@ int local_scan(int fd, uschar **return_text)
             PyObject *sys_path;
             PyObject *add_value;
 
-            sys_module = PyImport_ImportModule("sys");
+            sys_module = PyImport_ImportModule("sys");  /* New Reference */
             if (!sys_module)
                 {
                 PyErr_Clear();
@@ -507,26 +434,38 @@ int local_scan(int fd, uschar **return_text)
                 return PYTHON_FAILURE_RETURN;
                 }
 
-            sys_dict = PyModule_GetDict(sys_module); /* Borrowed Reference, never fails */
-            Py_DECREF(sys_module);
+            sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
+            sys_path = PyMapping_GetItemString(sys_dict, "path");  /* New reference */
 
-            sys_path = PyMapping_GetItemString(sys_dict, "path");
             if (!sys_path || (!PyList_Check(sys_path)))
                 {
                 PyErr_Clear();  /* in case sys_path was NULL, harmless otherwise */
                 *return_text = "Internal error, sys.path doesn't exist or isn't a list";
-                log_write(0, LOG_REJECT, "Python sys.path doesn't exist or isn't a list"); 
+                log_write(0, LOG_REJECT, "expy: Python sys.path doesn't exist or isn't a list"); 
                 /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
 
-            add_value = PyString_FromString(expy_path_add);
-            PyList_Append(sys_path, add_value);
+            add_value = PyString_FromString(expy_path_add);  /* New reference */
+            if (!add_value)
+                {
+                PyErr_Clear();
+                log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add); 
+                return PYTHON_FAILURE_RETURN;
+                }
+
+            if (PyList_Append(sys_path, add_value))
+                {
+                PyErr_Clear();
+                log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);                
+                }
+
             Py_DECREF(add_value);
             Py_DECREF(sys_path);
+            Py_DECREF(sys_module);
             }
 
-        expy_user_module = PyImport_ImportModule(expy_scan_module);
+        expy_user_module = PyImport_ImportModule(expy_scan_module);  /* New Reference */
 
         if (!expy_user_module)
             {
@@ -537,9 +476,9 @@ int local_scan(int fd, uschar **return_text)
             }
         }
 
-    user_dict = PyModule_GetDict(expy_user_module);  /* Borrowed Reference, never fails */
+    user_dict = PyModule_GetDict(expy_user_module);                      /* Borrowed Reference, never fails */
+    user_func = PyMapping_GetItemString(user_dict, expy_scan_function);  /* New reference */
 
-    user_func = PyMapping_GetItemString(user_dict, expy_scan_function);
     if (!user_func)
         {
         PyErr_Clear();
@@ -589,13 +528,14 @@ int local_scan(int fd, uschar **return_text)
      * make list of recipients, give module a copy to work with in 
      * List format, but keep original tuple to compare against later
      */
-    original_recipients = get_recipients();
-    working_recipients = PySequence_List(original_recipients);
+    original_recipients = get_recipients();                     /* New reference */
+    working_recipients = PySequence_List(original_recipients);  /* New reference */
     PyDict_SetItemString(expy_exim_dict, "recipients", working_recipients);
     Py_DECREF(working_recipients);    
 
     /* Try calling our function */
-    result = PyObject_CallFunction(user_func, NULL);
+    result = PyObject_CallFunction(user_func, NULL);            /* New reference */
+
     Py_DECREF(user_func);  /* Don't need ref to function anymore */      
 
     /* Check for Python exception */
@@ -610,7 +550,8 @@ int local_scan(int fd, uschar **return_text)
         }
 
     /* User code may have replaced recipient list, so re-get ref */
-    working_recipients = PyDict_GetItemString(expy_exim_dict, "recipients"); /* borrowed ref */
+    working_recipients = PyDict_GetItemString(expy_exim_dict, "recipients"); /* Borrowed reference */
+    Py_XINCREF(working_recipients);                                           /* convert to New reference */
 
     /* 
      * reconcile original recipient list with what's present after 
@@ -642,7 +583,8 @@ int local_scan(int fd, uschar **return_text)
             }
         }
 
-    Py_DECREF(original_recipients);  /* No longer needed */
+    Py_XDECREF(working_recipients);   /* No longer needed */
+    Py_DECREF(original_recipients);   /* No longer needed */
 
     /* Deal with the return value, first see if python returned a non-empty sequence */
     if (PySequence_Check(result) && (PySequence_Size(result) > 0))
@@ -654,10 +596,12 @@ int local_scan(int fd, uschar **return_text)
         if (PySequence_Size(result) > 1)
             {
             PyObject *str;
-            PyObject *obj = PySequence_GetItem(result, 1);
-            str = PyObject_Str(obj);
-            Py_DECREF(obj);
+            PyObject *obj = PySequence_GetItem(result, 1);   /* New reference */
+            str = PyObject_Str(obj);                         /* New reference */
+
             *return_text = string_copy(PyString_AsString(str));
+
+            Py_DECREF(obj);
             Py_DECREF(str);
             }
 
