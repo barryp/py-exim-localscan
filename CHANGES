@@ -1,4 +1,21 @@
 
+Version 4.20
+------------
+
+    Change the way header_lines are represented in exim.headers  
+    Instead of being two-element tuples (text, type), they're now 
+    a custom object with .text, and .type attributes.   
+
+    The .type attribute is settable, so you can set it to '*' to mark 
+    header lines that exim should consider as being deleted.  The .text
+    attribute is read-only
+
+    Access to the text and type attributes through sequence_methods is 
+    still possible for backwards compatibility (h[0] instead of h.text), 
+    but deprecated.  This'll probably be yanked in future versions, so
+    update your scripts!
+
+    
 Version 4.14
 ------------
 

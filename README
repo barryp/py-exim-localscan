@@ -208,12 +208,27 @@ altered for Python)
 
         header_list
 
-            A tuple of tuples.  Each inner tuple represents a header line and
-            is made up of 2 elements: (header-text, header-type) where 
-            header-type is the one-char code exim uses to identify certain 
-            header lines (see chapter 48 of exim manual).  You can't modify
-            this list directly - use the add_header() function (see above) to 
-            add new header lines.
+            A tuple of header_line objects.  Each header_line object has two 
+            attributes: '.text', and '.type'.  
+
+            The .text attribute is the entire text of the header line, which 
+            may contain internal newlines, and should end in a newline.  It is
+            not changable.
+
+            The .type attribute is the one-character code exim uses to identify 
+            certain header lines (see chapter 48 of exim manual).  It is changable, 
+            but only to single-character values.  Normally you'd set it to '*' to 
+            mark a header line as being deleted.
+
+            Previously, header lines were represented by a two-element tuple: (text, type)
+            Accessing the text and type through sequence-type methods is still supported
+            for backwards compatibility, but is deprecated.  So instead of saying something 
+            like:     if h[0] == 'foo'      you should now use:      if h.text == 'foo'
+            This backwards compatibility will probably be yanked in the future, so update
+            your scripts.
+
+            Use the add_header() function (see above) to add new header lines, although
+            you won't see them appear in this tuple.
 
         host_checking       (an integer)
         
