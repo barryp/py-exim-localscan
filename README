@@ -280,17 +280,16 @@ altered for Python)
             may contain internal newlines, and should end in a newline.  It is
             not changable.
 
-            The .type attribute is the one-character code exim uses to identify 
-            certain header lines (see chapter 48 of exim manual).  It is changable, 
+            The .type attribute is the one-character code Exim uses to identify 
+            certain header lines (see chapter 48 of Exim manual).  It is changable, 
             but only to single-character values.  Normally you'd set it to '*' to 
             mark a header line as being deleted.
 
-            Previously, header lines were represented by a two-element tuple: (text, type)
-            Accessing the text and type through sequence-type methods is still supported
-            for backwards compatibility, but is deprecated.  So instead of saying something 
-            like:     if h[0] == 'foo'      you should now use:      if h.text == 'foo'
-            This backwards compatibility will probably be yanked in the future, so update
-            your scripts.
+            Here's an example bit of code that deletes headers beginning with 'x-spam':
+
+                for h in exim.headers:
+                    if h.type != '*' and h.text.lower().startswith('x-spam'):
+                        h.type = '*'
 
             Use the add_header() function (see above) to add new header lines, although
             you won't see them appear in this tuple.
@@ -357,7 +356,7 @@ Please note that the 'recipients' variable is the only one for which
 modifications have any effect on Exim.  
 
 ------------------------
-MORE ELABORATE EXAMPLE
+MORE ELABORATE EXAMPLES
 ------------------------
 
 Here is a fancier local_scan function, that calls a 
@@ -394,5 +393,29 @@ def local_scan():
     return exim.LOCAL_SCAN_TEMPREJECT
 ------------------------------------
 
+
+
+Another useful bit of code for writing out a complete copy of a message
+to a given filename (perhaps to feed into antivirus or spam-recognition 
+software).
+
+-----------
+def copy_message(msg_filename):
+    f = open(msg_filename, 'w')
+
+    for h in exim.headers:
+        if h.type != '*':
+            f.write(h.text)
+
+    f.write('\n')
+
+    while 1:
+        s = os.read(exim.fd, 16384)
+        if not s:
+            break
+        f.write(s)
+
+    f.close()
+--------------------
 
 ### EOF ###
