@@ -131,7 +131,7 @@ static PyObject *expy_expand_string(PyObject *self, PyObject *args)
     
     if (!result)
         {
-        PyErr_Format(PyExc_ValueError, "exim expansion of [%s] failed", str);
+        PyErr_Format(PyExc_ValueError, "expansion [%s] failed: %s", str, expand_string_message);
         return NULL;
         }
     
@@ -162,9 +162,6 @@ static PyObject *expy_header_add(PyObject *self, PyObject *args)
 static PyObject *expy_log_write(PyObject *self, PyObject *args)
     {
     char *str;
-    char *p;
-    int percent_count;
-    int len;
     int which = LOG_MAIN;
     
     if (!PyArg_ParseTuple(args, "s|i", &str, &which))
@@ -176,12 +173,31 @@ static PyObject *expy_log_write(PyObject *self, PyObject *args)
     return Py_None;
     }
 
+/*
+ * Print through Exim's debug_print() function, which does nothing if
+ * Exim isn't in debugging mode. 
+ */
+static PyObject *expy_debug_print(PyObject *self, PyObject *args)
+    {
+    char *str;
+    int which = LOG_MAIN;
+    
+    if (!PyArg_ParseTuple(args, "s", &str))
+        return NULL;
+ 
+    debug_printf(get_format_string(str, 0));
+
+    Py_INCREF(Py_None);
+    return Py_None;
+    }
+
 
 static PyMethodDef expy_exim_methods[] = 
     {        
     {"expand", expy_expand_string, METH_VARARGS, "Have exim expand string."},
     {"log", expy_log_write, METH_VARARGS, "Write message to exim log."},
     {"add_header", expy_header_add, METH_VARARGS, "Add header to message."},
+    {"debug_print", expy_debug_print, METH_VARARGS, "Print if Exim is in debugging mode, otherwise do nothing."},
     {NULL, NULL, 0, NULL}
     };
 
@@ -329,10 +345,13 @@ int local_scan(int fd, uschar **return_text)
     /* so far so good, prepare to run function */
 
     /* Copy exim variables */
-    expy_dict_string("sender_address", sender_address);
+    expy_dict_int("debug_selector", debug_selector);
+    expy_dict_int("host_checking", host_checking);
     expy_dict_string("interface_address", interface_address);
     expy_dict_int("interface_port", interface_port);
+    expy_dict_string("message_id", message_id);
     expy_dict_string("received_protocol", received_protocol);
+    expy_dict_string("sender_address", sender_address);
     expy_dict_string("sender_host_address", sender_host_address);
     expy_dict_string("sender_host_authenticated", sender_host_authenticated);
     expy_dict_string("sender_host_name", sender_host_name);
@@ -341,10 +360,21 @@ int local_scan(int fd, uschar **return_text)
 
     /* copy some constants */
     expy_dict_int("LOG_MAIN", LOG_MAIN);
+    expy_dict_int("LOG_PANIC", LOG_PANIC);
     expy_dict_int("LOG_REJECT", LOG_REJECT);
+    
     expy_dict_int("LOCAL_SCAN_ACCEPT", LOCAL_SCAN_ACCEPT);
+    expy_dict_int("LOCAL_SCAN_ACCEPT_FREEZE", LOCAL_SCAN_ACCEPT_FREEZE);
+    expy_dict_int("LOCAL_SCAN_ACCEPT_QUEUE", LOCAL_SCAN_ACCEPT_QUEUE);
     expy_dict_int("LOCAL_SCAN_REJECT", LOCAL_SCAN_REJECT);
+    expy_dict_int("LOCAL_SCAN_REJECT_NOLOGHDR", LOCAL_SCAN_REJECT_NOLOGHDR);
     expy_dict_int("LOCAL_SCAN_TEMPREJECT", LOCAL_SCAN_TEMPREJECT);
+    expy_dict_int("LOCAL_SCAN_TEMPREJECT_NOLOGHDR", LOCAL_SCAN_TEMPREJECT_NOLOGHDR);
+    expy_dict_int("MESSAGE_ID_LENGTH", MESSAGE_ID_LENGTH);
+    expy_dict_int("SPOOL_DATA_START_OFFSET", SPOOL_DATA_START_OFFSET);
+
+    expy_dict_int("D_v", D_v);
+    expy_dict_int("D_local_scan", D_local_scan);
 
     /* set the headers */
     expy_get_headers();

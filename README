@@ -1,7 +1,7 @@
-Python Local Scan for Exim
+Python Local Scan for Exim 4.14
 ===========================
 
-    2002-10-19   Barry Pederson <bp@barryp.org>
+    2003-04-06   Barry Pederson <bp@barryp.org>
 
 This software embeds a Python interpreter into Exim 4.x, for running a 
 Python-based local_scan function against incoming messages.
@@ -90,11 +90,29 @@ altered for Python)
 
                 exim.add_header('X-Python: scanned')
 
+
+        debug_print(string):
+        
+            If this function is called when Exim is not in debugging mode, it 
+            does nothing. In debugging mode, it adds to the debugging output. 
+            If the "pid" and/or "timestamp" debugging selectors are set, the pid 
+            and/or timestamp are automatically added to each debug output line.
+                        
+            Newlines are NOT added automatically.
+            
+                exim.debug_print('some debug message\n')  
+                    
+
         expand(string):
 
             Perform an Exim string-expansion.  For example:
 
                 spooldir = exim.expand('$spool_directory')
+
+            If the expansion fails, a ValueError exception is raised and
+            the exception's error message includes the string Exim returns
+            in C through expand_string_message.
+        
         
         log(string [, which=LOG_MAIN]):
 
@@ -103,6 +121,7 @@ altered for Python)
 
                 exim.log('Scanned by Python')
                 exim.log('Rejected by Python', exim.LOG_REJECT)
+                exim.log("We're freaking out here!', exim.LOG_PANIC)
 
 
     Constants
@@ -111,6 +130,7 @@ altered for Python)
      these names if you really want to confuse yourself)
 
         LOG_MAIN
+        LOG_PANIC
         LOG_REJECTLOG
             Used as the second argument to the log() function to specify
             which Exim log you want to write to.  Example:
@@ -118,21 +138,56 @@ altered for Python)
                 exim.log('Python was here', exim.LOG_MAIN)
 
         LOCAL_SCAN_ACCEPT
+        LOCAL_SCAN_ACCEPT_FREEZE
+        LOCAL_SCAN_ACCEPT_QUEUE
         LOCAL_SCAN_REJECT
+        LOCAL_SCAN_REJECT_NOLOGHDR
         LOCAL_SCAN_TEMPREJECT
+        LOCAL_SCAN_TEMPREJECT_NOLOGHDR
             Used one of these for the return value of your local scan function
          
+        D_v
+        D_local_scan
+            Bitmasks for checking the debug_selector variable (see below)
+
+        MESSAGE_ID_LENGTH
+            The length of message identification strings. This is the id used internally
+            by exim. The external version for use in Received: strings has a leading 'E'
+            added to ensure it starts with a letter. 
+
+        SPOOL_DATA_START_OFFSET
+            The offset to the start of the data in the data file - this allows for
+            the name of the data file to be present in the first line. 
+
+        
 
     Variables
     ----------        
 
+        debug_selector      (an integer)
+        
+            zero when no debugging is taking place. Otherwise, it is a bitmap
+            of debugging selectors. Two bits are identified for use in local_scan()
+            and defined as constants (see above):
+                        
+            The D_v bit is set when -v was present on the command line. This is a
+            testing option that is not privileged - any caller may set it. All the
+            other selector bits can be set only by admin users.
+                                                
+            The D_local_scan bit is provided for use by local_scan(); it is set by
+            the +local_scan debug selector. It is not included in the default set
+            of debugging bits.
+                                                                        
+
         fd                  (an integer)
 
             The file descriptor for the file that contains the body of the 
-            message (the -D file). The descriptor is positioned at character 17 
-            of the file, which is the first character of the body itself, 
-            because the first 17 characters are the message id followed by a 
-            newline. The file is open for reading and writing, but updating it 
+            message (the -D file). The descriptor is positioned at the first 
+            character of the body itself, having skipped over the beginning
+            of the file which contains the message_id or the name of the data 
+            file in the first line.
+            
+            The file is open for reading and writing, but updating it 
             is not recommended.
 
             Here is an example snippet of code that copies the body of the 
@@ -160,6 +215,10 @@ altered for Python)
             this list directly - use the add_header() function (see above) to 
             add new header lines.
 
+        host_checking       (an integer)
+        
+            true during a -bh session
+
         interface_address   (a string)
 
             The IP address of the interface that received the message, as 
@@ -169,6 +228,10 @@ altered for Python)
 
             The port on which this message was received.
 
+        message_id          (a string)
+        
+            Message id of the message we're scanning
+         
         received_protocol   (a string)
 
             The name of the protocol by which the message was received.
@@ -252,4 +315,5 @@ def local_scan():
     return exim.LOCAL_SCAN_TEMPREJECT
 ------------------------------------
 
-### EOF ###                    
+
+### EOF ###

@@ -1,4 +1,38 @@
 
+Version 4.14
+------------
+
+    Will now use the same version number as the Exim it's supposed to 
+    correspond with.
+    
+    Added support for new local_scan features such as:
+    
+        debug_print method - accesses Exim's debug_printf() function
+
+        Constants:
+         
+             LOG_PANIC
+             LOCAL_SCAN_ACCEPT_FREEZE
+             LOCAL_SCAN_ACCEPT_QUEUE
+             LOCAL_SCAN_REJECT_NOLOGHDR
+             LOCAL_SCAN_TEMPREJECT_NOLOGHDR
+             MESSAGE_ID_LENGTH
+             SPOOL_DATA_START_OFFSET
+                     
+        Variables:
+        
+             debug_selector
+             host_checking
+             message_id
+
+    Calls to expand_string() that fail now return Exim's
+    expand_string_message in the exception that's raised. 
+
+    The patch_exim_makefile.py script actually works the way
+    the README and README.FreeBSD files describe.             
+             
+             
 Version 1.0
 ------------
-First version
+
+    First version
