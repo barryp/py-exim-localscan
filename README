@@ -1,7 +1,7 @@
 Python Local Scan for Exim 4.x
 ===========================
 
-    2003-04-06   Barry Pederson <bp@barryp.org>
+    2003-07-05   Barry Pederson <bp@barryp.org>
 
 This software embeds a Python interpreter into Exim 4.x, for running a 
 Python-based local_scan function against incoming messages.
@@ -24,28 +24,80 @@ Exim install docs told you to create).  The script will patch the Local/Makefile
 and symlink the C sourcefile for the local_scan function (which should live
 in the same directory as the patch script).
 
-The expy_local_scan.c file has a few "tweakable settings" near the the
-top of the file.  The defaults should work fine, but if you want to use
-different Python module or function names, this is where you'd change them.
-
 Rebuild Exim using the patched Makefile, if you don't see any errors then
 you should be in business.  Install the new binary the same way as you did
 with plain Exim.
 
+----------------
+CONFIGURING EXIM
+----------------
+
+There are a few options for this software that you may set in the
+Exim 'configure' file, in the 'local_scan' section. 
+
+    expy_enabled
+   
+       Type: boolean
+       Default: true
+
+       Gives you a way to cause this software to not try and execute
+       any Python code, if you needed to disable it for some reason.
+       For example:
+
+           expy_enabled = false
+
+    expy_exim_module
+   
+       Type: string
+       Default: exim
+
+       Specifies the name of the Python module that this software creates 
+       to hold the builtin Exim functions, constants, and variables 
+       described below.
+
+    expy_path_add
+
+       Type: string
+       Default: unset
+
+       Append one directory name to the Python sys.path list,
+       useful for specifying where your local_scan module resides.  
+       For example:
+
+           expy_path_add = /foo/bar/mystuff
+
+       If this variable isn't set, you'll have to place your module
+       somewhere in the default Python path, such as the 
+       site-packages directory.  
+
+    expy_scan_module
+   
+       Type: string
+       Default: exim_local_scan
+
+       Name of the Python module you're supplying that contains
+       a local_scan function.
+
+    expy_scan_function
+   
+       Type: string
+       Default: local_scan
+
+       Name of the function within your module that this
+       software will try and execute to perform the local_scan.
+
+expy_path_add is probably the only one you'll really need. The others
+are handy if you don't care for their default values.
+
+
 ----------
 RUNNING
 ----------
-(this part assumes you're using the default 'tweakable settings' 
-in expy_local_scan.c)
 
-For every message that comes in, Exim will now call on embedded Python
-to import a module named 'exim_local_scan', and run a function in that 
-module named 'local_scan'.  
-
-You need to supply an exim_local_scan.py file somewhere in your Python 
-path. The Python 'site-packages' directory is a good place.  Running the 
-patch_exim_makefile.py script without any args will print a suggested 
-pathname for your module.
+For every message that comes in, under the default Exim local_scan 
+configuration settings described above, Exim will now call on embedded 
+Python to import a module named 'exim_local_scan', and run a function 
+in that module named 'local_scan'.  
 
 Here is a sample "hello world" local scan module for Python:
 
@@ -75,7 +127,8 @@ LOCAL_SCAN_* constant, along with a string.  For example:
         return exim.LOCAL_SCAN_TEMPREJECT, 'Come back later'
 
 Several Exim functions, constants, and variables are available through
-a module named 'exim', which user-supplied modules will want to import
+a module named 'exim' (that name is set by the expy_exim_module setting
+described above), which user-supplied modules will want to import
 (as in the "hello world" example above).  (Most of these descriptions
 are basically copied from the Exim Local Scan documentation chapter 38, but
 altered for Python)
@@ -296,8 +349,8 @@ MORE ELABORATE EXAMPLE
 ------------------------
 
 Here is a fancier local_scan function, that calls a 
-'scanner' module stored outside the normal Python path, and
-catches any exceptions raised and logs them in the Exim rejectlog
+separate 'scanner' module and catches any exceptions 
+raised and logs them in the Exim rejectlog
 
 -----------------------------------
 import sys
@@ -310,7 +363,6 @@ import exim
 #
 def local_scan():
     try:
-        sys.path.append('/usr/local/etc/exim/local_scan')
         import scanner
         return scanner.local_scan()
     except:

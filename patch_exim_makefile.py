@@ -25,6 +25,7 @@ def patch_makefile(source_dir, build_dir):
     lib = os.path.join(cfg('LIBPL'), cfg('LIBRARY'))
     extralibs =  ' '.join([cfg('LIBM'), cfg('LIBS'), cfg('LDFLAGS'), lib, cfg('LINKFORSHARED')])
     source = os.path.join('Local', SOURCE_FILE)
+    has_options = 1
 
     #
     # Look for existing CFLAGS and EXTRALIBS lines, and append info.  
@@ -40,6 +41,9 @@ def patch_makefile(source_dir, build_dir):
         if makefile[i].startswith('LOCAL_SCAN_SOURCE='):
             makefile[i] = 'LOCAL_SCAN_SOURCE=' + source + '\n'
             source = None
+        if makefile[i].startswith('LOCAL_SCAN_HAS_OPTIONS='):
+            makefile[i] = 'LOCAL_SCAN_HAS_OPTIONS=yes\n'
+            has_options = 0
 
     #
     # Didn't update existing lines? append new ones
@@ -50,6 +54,8 @@ def patch_makefile(source_dir, build_dir):
         makefile.append('EXTRALIBS=%s\n' % extralibs)
     if source:
         makefile.append('LOCAL_SCAN_SOURCE=%s\n' % source)
+    if has_options:
+        makefile.append('LOCAL_SCAN_HAS_OPTIONS=yes\n')
 
     #
     # Write out updated makefile

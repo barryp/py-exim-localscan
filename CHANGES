@@ -1,3 +1,13 @@
+Version 4.20.1
+------------
+
+    Several settings that were previously fixed at compile-time
+    may now be set at run-time though the Exim 'configure' file.
+
+    Notably: expy_path_add allows you to add a directory to the 
+    Python path, so you don't have to have your local_scan module
+    in the site-packages directory necessarily.  
+
 
 Version 4.20
 ------------

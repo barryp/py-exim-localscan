@@ -8,14 +8,18 @@
 #include <Python.h>
 #include "local_scan.h"
 
-/* ---- Tweakable settings -------- 
+/* ---- Settings controllable at runtime through Exim 'configure' file -------- 
  
- This code will act *somewhat* like this python-ish pseudocode:
+ This local_scan module will act *somewhat* like this python-ish pseudocode:
    
    try:
-       import USER_MODULE_NAME 
+       if {expy_path_add}:
+           import sys
+           sys.path.append({expy_path_add})
 
-       rc = USER_MODULE_NAME.USER_FUNCTION_NAME()
+       import {expy_scan_module} 
+
+       rc = {expy_scan_module}.{expy_scan_function}()
 
        if rc is sequence:
            if len(rc) > 1:
@@ -28,20 +32,34 @@
        return_text = "some description of problem"
        return PYTHON_FAILURE_RETURN
    
- And a do-nothing USER_MODULE_NAME.py file might look like:
+ And a do-nothing {expy_scan_module}.py file might look like:
 
-   import BUILTIN_MODULE_NAME
+   import {expy_exim_module}
 
-   def USER_FUNCTION_NAME():
-       return BUILTIN_MODULE_NAME.LOCAL_SCAN_ACCEPT
+   def {expy_scan_function}():
+       return {expy_exim_module}.LOCAL_SCAN_ACCEPT
 
 */
-#define BUILTIN_MODULE_NAME     "exim"
-#define USER_MODULE_NAME        "exim_local_scan"
-#define USER_FUNCTION_NAME      "local_scan"
+
+static BOOL    expy_enabled = TRUE;
+static uschar *expy_path_add = NULL;
+static uschar *expy_exim_module = US"exim";
+static uschar *expy_scan_module = US"exim_local_scan";
+static uschar *expy_scan_function = US"local_scan";
 #define PYTHON_FAILURE_RETURN   LOCAL_SCAN_ACCEPT
 
-/* ------- Globals ------------ */
+optionlist local_scan_options[] = 
+    {
+    { "expy_enabled", opt_bool, &expy_enabled},
+    { "expy_exim_module",  opt_stringptr, &expy_exim_module },
+    { "expy_path_add",  opt_stringptr, &expy_path_add },
+    { "expy_scan_function",  opt_stringptr, &expy_scan_function },
+    { "expy_scan_module",  opt_stringptr, &expy_scan_module },
+    };
+
+int local_scan_options_count = sizeof(local_scan_options)/sizeof(optionlist);
+
+/* ------- Private Globals ------------ */
 
 static PyObject *expy_exim_dict = NULL;
 static PyObject *expy_user_module = NULL;
@@ -458,35 +476,70 @@ int local_scan(int fd, uschar **return_text)
     PyObject *original_recipients;
     PyObject *working_recipients;
 
+    if (!expy_enabled)
+        return LOCAL_SCAN_ACCEPT;
+
     if (!Py_IsInitialized())  /* maybe some other exim add-on already initialized Python? */
         Py_Initialize();
 
     if (!expy_exim_dict)
         {
-        PyObject *module = Py_InitModule(BUILTIN_MODULE_NAME, expy_exim_methods); /* borrowed ref */
+        PyObject *module = Py_InitModule(expy_exim_module, expy_exim_methods); /* borrowed ref */
         expy_exim_dict = PyModule_GetDict(module);         /* borrowed ref */
         Py_INCREF(expy_exim_dict);                         /* want to keep it for later */
         }
 
     if (!expy_user_module)
         {
-        expy_user_module = PyImport_ImportModule(USER_MODULE_NAME);
+        if (expy_path_add)
+            {
+            PyObject *sys_module;
+            PyObject *sys_dict;
+            PyObject *sys_path;
+            PyObject *add_value;
+
+            sys_module = PyImport_ImportModule("sys");
+            if (!sys_module)
+                {
+                *return_text = "Internal error, can't import Python sys module";
+                log_write(0, LOG_REJECT, "Couldn't import Python 'sys' module"); 
+                return PYTHON_FAILURE_RETURN;
+                }
+
+            sys_dict = PyModule_GetDict(sys_module); /* Borrowed Reference, never fails */
+            Py_DECREF(sys_module);
+
+            sys_path = PyMapping_GetItemString(sys_dict, "path");
+            if (!sys_path || (!PyList_Check(sys_path)))
+                {
+                *return_text = "Internal error, sys.path doesn't exist or isn't a list";
+                log_write(0, LOG_REJECT, "Python sys.path doesn't exist or isn't a list"); 
+                return PYTHON_FAILURE_RETURN;
+                }
+
+            add_value = PyString_FromString(expy_path_add);
+            PyList_Append(sys_path, add_value);
+            Py_DECREF(add_value);
+            Py_DECREF(sys_path);
+            }
+
+        expy_user_module = PyImport_ImportModule(expy_scan_module);
 
         if (!expy_user_module)
             {
             *return_text = "Internal error, missing module";
-            log_write(0, LOG_REJECT, "Couldn't import 'expy_local_scan' module"); 
+            log_write(0, LOG_REJECT, "Couldn't import Python '%s' module", expy_scan_module); 
             return PYTHON_FAILURE_RETURN;
             }
         }
 
     user_dict = PyModule_GetDict(expy_user_module);  /* Borrowed Reference, never fails */
 
-    user_func = PyMapping_GetItemString(user_dict, USER_FUNCTION_NAME);
+    user_func = PyMapping_GetItemString(user_dict, expy_scan_function);
     if (!user_func)
         {
         *return_text = "Internal error, missing function";
-        log_write(0, LOG_REJECT, "Python expy_local_scan module doesn't have a 'local_scan' function"); 
+        log_write(0, LOG_REJECT, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function); 
         return PYTHON_FAILURE_RETURN;
         }
 
@@ -619,7 +672,7 @@ int local_scan(int fd, uschar **return_text)
     /* didn't return anything usable */
     Py_DECREF(result);
     *return_text = "Internal error, bad return code";
-    log_write(0, LOG_REJECT, "Python expy_local_scan module didn't return integer"); 
+    log_write(0, LOG_REJECT, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function); 
     return PYTHON_FAILURE_RETURN;
     }
 
