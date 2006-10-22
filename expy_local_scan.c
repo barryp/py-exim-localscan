@@ -116,7 +116,7 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
     if (self->hline == NULL)
         {
         PyErr_Format(PyExc_AttributeError, "Header object no longer valid, held over from previously processed message?");
-        return NULL;
+        return -1;
         }
 
     if (!strcmp(name, "type"))
