@@ -1,3 +1,13 @@
+Version 4.63.0
+--------------
+    Fix a minor C error found while building for Python 2.5
+    and Exim 4.63.  No changes in functionality - should still
+    work with older/newer Exim/Python combinations.
+
+    Updated the README.FreeBSD to use more modern version
+    numbers in the examples.
+
+
 Version 4.41.0
 --------------
     Workaround problem preventing compiling on Cygwin using
