@@ -1,3 +1,13 @@
+Trunk
+--------------
+    Updated the program which patches the Exim Makefile to
+    link in the Python interpreter shared library instead
+    of statically linking it in.  It makes for a smaller
+    Exim binary, and I imagine it'll allow you to take
+    advantage of minor Python upgrades without having
+    to rebuild Exim.
+    
+
 Version 4.63.0
 --------------
     Fix a minor C error found while building for Python 2.5

@@ -9,7 +9,9 @@ module, cross your fingers.
   2002-10-19 Barry Pederson <bp@barryp.org>
 
 """
-import distutils.sysconfig, os, os.path
+import os
+import os.path
+from distutils import sysconfig
 
 
 SOURCE_FILE = 'expy_local_scan.c'
@@ -17,23 +19,26 @@ SOURCE_FILE = 'expy_local_scan.c'
 
 def patch_makefile(source_dir, build_dir):
     makefile_name = os.path.join(build_dir, 'Local', 'Makefile')
-    
+
     makefile = open(makefile_name, 'r').readlines()
 
-    cfg = distutils.sysconfig.get_config_var
+    cfg = sysconfig.get_config_var
+
     cflags = '-I%s %s' % (cfg('INCLUDEPY'), cfg('CFLAGSFORSHARED'))
-    lib = os.path.join(cfg('LIBPL'), cfg('LIBRARY'))
-    extralibs =  ' '.join([cfg('LIBM'), cfg('LIBS'), cfg('LDFLAGS'), lib, cfg('LINKFORSHARED')])
+    extralibs = '%s -lpython%s' % (cfg('LDFLAGS'), cfg('VERSION'))
     source = os.path.join('Local', SOURCE_FILE)
-    has_options = 1
+    has_options = True
 
     #
-    # Look for existing CFLAGS and EXTRALIBS lines, and append info.  
+    # Look for existing CFLAGS and EXTRALIBS lines, and append info.
     # Note if this has been done by setting cflags and extralibs to None
+    #
+    # Look for LOCAL_SCAN_SOURCE and LOCAL_SCAN_HAS_OPTIONS lines, replace
+    # if necessary.
     #
     for i in range(len(makefile)):
         if makefile[i].startswith('CFLAGS=') and cflags:
-            makefile[i] = makefile[i].rstrip() + ' ' + cflags + '\n'
+            makefile[i] = makefile[i].rstrip() + ' ' + cflags.strip() + '\n'
             cflags = None
         if makefile[i].startswith('EXTRALIBS=') and extralibs:
             makefile[i] = makefile[i].rstrip() + ' ' + extralibs + '\n'
@@ -43,10 +48,10 @@ def patch_makefile(source_dir, build_dir):
             source = None
         if makefile[i].startswith('LOCAL_SCAN_HAS_OPTIONS='):
             makefile[i] = 'LOCAL_SCAN_HAS_OPTIONS=yes\n'
-            has_options = 0
+            has_options = False
 
     #
-    # Didn't update existing lines? append new ones
+    # Didn't update/replace existing lines? append new ones
     #
     if cflags:
         makefile.append('CFLAGS=%s\n' % cflags)
@@ -61,13 +66,13 @@ def patch_makefile(source_dir, build_dir):
     # Write out updated makefile
     #
     makefile = ''.join(makefile)
-    open(makefile_name, 'w').write(makefile)    
+    open(makefile_name, 'w').write(makefile)
 
     #
     # Symlink in C sourcefile
     #
     os.symlink(os.path.join(source_dir, SOURCE_FILE), os.path.join(build_dir, 'Local', SOURCE_FILE))
-    
+
 
 if __name__ == '__main__':
     import sys
@@ -76,7 +81,7 @@ if __name__ == '__main__':
         print '    Usage: %s <build_dir>' % sys.argv[0]
         print ''
         print 'Suggested path for your local_scan module:'
-        print '    ', os.path.join(distutils.sysconfig.get_python_lib(), 'exim_local_scan.py')
+        print '    ', os.path.join(sysconfig.get_python_lib(), 'exim_local_scan.py')
         sys.exit(1)
 
     build_dir = sys.argv[1]
