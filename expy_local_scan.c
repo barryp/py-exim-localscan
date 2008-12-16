@@ -122,7 +122,11 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
     if (!strcmp(name, "type"))
         {
         char *p;
+#if PY_MINOR_VERSION < 5
         int len;
+#else
+        Py_ssize_t len;
+#endif
 
         if (PyString_AsStringAndSize(value, &p, &len) == -1)
             return -1;

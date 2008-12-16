@@ -6,7 +6,10 @@ Trunk
     Exim binary, and I imagine it'll allow you to take
     advantage of minor Python upgrades without having
     to rebuild Exim.
-    
+
+    Another little tweak to make it compile more cleanly
+    on Python 2.5.  Should be backwards compatible with
+    older Pythons.
 
 Version 4.63.0
 --------------
