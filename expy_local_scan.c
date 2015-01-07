@@ -309,13 +309,154 @@ static PyObject *expy_debug_print(PyObject *self, PyObject *args)
     return Py_None;
     }
 
+/*
+ * Create a child process that runs the command specified.
+ * The return value is (stdout, stdin, pid), where stdout and stdin are file
+ * descriptors to the appropriate pipes (stderr is joined with stdout).
+ * The environment may be specified, and a new umask supplied.
+ */
+static PyObject *expy_child_open(PyObject *self, PyObject *args)
+    {
+    pid_t pid;
+    int infdptr;
+    int outfdptr;
+    PyObject * py_argv;
+    PyObject * py_envp;
+    int umask;
+    unsigned char make_leader = 0;
+    Py_ssize_t i;
+    Py_ssize_t argc;
+    uschar ** argv;
+    uschar ** envp;
+    Py_ssize_t envp_len;
 
-static PyMethodDef expy_exim_methods[] = 
-    {        
+    /*
+     * The first two arguments are tuples of strings (argv, envp).
+     */
+    if (!PyArg_ParseTuple(args, "OOi|b", &py_argv, &py_envp, &umask, &make_leader))
+        return NULL;
+
+    argc = PySequence_Size(py_argv);
+    argv = PyMem_New(uschar *, argc + 1);
+    for (i=0; i<argc; ++i)
+        {
+        argv[i] = (uschar *)PyString_AsString(PyTuple_GET_ITEM(py_argv, i)); /* borrowed ref */
+        }
+    argv[argc] = NULL;
+    envp_len = PySequence_Size(py_envp);
+    envp = PyMem_New(uschar *, envp_len + 1);
+    for (i=0; i<envp_len; ++i)
+        {
+        envp[i] = (uschar *)PyString_AsString(PyTuple_GET_ITEM(py_envp, i)); /* borrowed ref */
+        }
+    envp[envp_len] = NULL;
+    pid = child_open(argv, envp, umask, &infdptr, &outfdptr, (BOOL) make_leader);
+    PyMem_Del(argv);
+    PyMem_Del(envp);
+    if (pid == -1)
+    {
+        /*
+         * An error occurred.
+         */
+        PyErr_Format(PyExc_OSError, "error %d", errno);
+        return NULL;
+    }
+
+    return Py_BuildValue("(iii)", infdptr, outfdptr, pid);
+    }
+
+/*
+ * Wait for a child process to terminate, or for a timeout (in seconds) to
+ * expire.  A timeout of zero (the default) means wait as long as it takes.
+ * The return value is the process ending status.
+ */
+static PyObject *expy_child_close(PyObject *self, PyObject *args)
+    {
+    int pid;
+    int timeout = 0;
+    int result;
+
+    if (!PyArg_ParseTuple(args, "i|i", &pid, &timeout))
+        return NULL;
+
+    result = child_close((pid_t) pid, timeout);
+
+    if (result < 0 && result > -256)
+    {
+        /*
+         * The process was ended by a signal.  The result is the negation
+         * of the signal number.
+         */
+        PyErr_Format(PyExc_OSError, "ended by signal %d", result * -1);
+        return NULL;
+    }
+    else if (result == -256)
+    {
+        /*
+         * The process timed out.
+         */
+        PyErr_Format(PyExc_OSError, "timed out");
+        return NULL;
+    }
+    else if (result < -256)
+    {
+        /*
+         * An error occurred.
+         */
+        PyErr_Format(PyExc_OSError, "error %d", errno);
+        return NULL;
+    }
+
+    return PyInt_FromLong(result);
+    }
+
+/*
+ * Note that this is the child_open_exim2 method from the Exim local_scan
+ * API - any child_open_exim call can be done through this method as well.
+ * Also, rather than returning a file descriptor, we take the message
+ * content as an argument, and write it out to the subprocess.  We still
+ * return the PID, so that execution can continue while Exim is processing
+ * the message if the caller so desires.
+ * Submit a new message to Exim, returning the PID of the subprocess.
+ * Essentially, this is running 'exim -t -oem -oi -f sender -oMas auth'
+ * (-oMas is omitted if no authentication is provided).
+ */
+static PyObject *expy_child_open_exim(PyObject *self, PyObject *args)
+    {
+    char *message;
+    int message_length;
+    char *sender = "";
+    char *sender_authentication = NULL;
+    pid_t exim_pid;
+    int fd;
+
+    if (!PyArg_ParseTuple(args, "s#|ss", &message, &message_length, &sender, &sender_authentication))
+        return NULL;
+
+    exim_pid = child_open_exim2(&fd, (uschar *) sender, (uschar *) sender_authentication);
+    if (write(fd, message, message_length) <= 0)
+    {
+        /*
+         * An error occurred.
+         */
+        PyErr_Format(PyExc_OSError, "error %d", errno);
+	close(fd);
+        return NULL;
+    }
+    close(fd);
+    return PyInt_FromLong(exim_pid);
+    }
+
+
+static PyMethodDef expy_exim_methods[] =
+    {
     {"expand", expy_expand_string, METH_VARARGS, "Have exim expand string."},
     {"log", expy_log_write, METH_VARARGS, "Write message to exim log."},
     {"add_header", expy_header_add, METH_VARARGS, "Add header to message."},
     {"debug_print", expy_debug_print, METH_VARARGS, "Print if Exim is in debugging mode, otherwise do nothing."},
+    {"child_open", expy_child_open, METH_VARARGS, "Create a child process."},
+    {"child_close", expy_child_close, METH_VARARGS, "Wait for a child process to terminate."},
+    {"child_open_exim", expy_child_open_exim, METH_VARARGS, "Submit a message to Exim."},
     {NULL, NULL, 0, NULL}
     };
 
