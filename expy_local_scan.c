@@ -4,6 +4,7 @@
  * 2002-10-20  Barry Pederson <bp@barryp.org>
  *
  */
+#include <errno.h>
 
 #include <Python.h>
 #include "local_scan.h"
@@ -98,7 +99,7 @@ static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
         }
 
     if (!strcmp(name, "text"))
-        return PyString_FromString(self->hline->text);
+        return PyString_FromString((const char *)self->hline->text);
 
     if (!strcmp(name, "type"))
         {
@@ -186,9 +187,14 @@ static char *get_format_string(char *str, int need_newline)
     char *p;
     char *q;
     char *newstr;
-    int percent_count;
-    int len;
-
+    /*
+     * If there are more percentage signs, or if the string is longer,
+     * than the maximum number that will fit in an unsigned int on this
+     * platform, then this will overflow.  That seems extremely
+     * unlikely.
+     */
+    unsigned int percent_count;
+    unsigned int len;
     /* Count number of '%' characters in string, and get the total length while at it */
     for (p = str, percent_count = 0; *p; p++)
         if (*p == '%')
@@ -241,12 +247,12 @@ static char *get_format_string(char *str, int need_newline)
 static PyObject *expy_expand_string(PyObject *self, PyObject *args)
     {
     char *str;
-    char *result;
+    uschar *result;
 
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
 
-    result = expand_string(str);
+    result = expand_string((uschar *)str);
 
     if (!result)
         {
@@ -254,7 +260,7 @@ static PyObject *expy_expand_string(PyObject *self, PyObject *args)
         return NULL;
         }
 
-    return PyString_FromString(result);
+    return PyString_FromString((const char *)result);
     }
 
 
@@ -471,7 +477,7 @@ static void expy_dict_string(char *key, uschar *val)
     PyObject *s;
 
     if (val)
-        s = PyString_FromString(val);
+        s = PyString_FromString((const char *)val);
     else
         {
         s = Py_None;
@@ -502,7 +508,7 @@ static void expy_dict_int(char *key, int val)
  */
 static PyObject *get_headers()
     {
-    int header_count;
+    Py_ssize_t header_count;
     header_line *p;
     PyObject *result;
 
@@ -529,7 +535,7 @@ static PyObject *get_headers()
  */
 static void clear_headers(PyObject *header_tuple)
     {
-    int i, n;
+    Py_ssize_t i, n;
 
     n = PyTuple_Size(header_tuple);
     for (i = 0; i < n; i++)
@@ -549,11 +555,11 @@ static void clear_headers(PyObject *header_tuple)
 static PyObject *get_recipients()
     {
     PyObject *result;
-    int i;
+    Py_ssize_t i;
 
     result = PyTuple_New(recipients_count);
     for (i = 0; i < recipients_count; i++)
-        PyTuple_SetItem(result, i, PyString_FromString(recipients_list[i].address));
+        PyTuple_SetItem(result, i, PyString_FromString((const char *)recipients_list[i].address));
 
     return result;
     }
@@ -594,7 +600,7 @@ int local_scan(int fd, uschar **return_text)
 
     if (!expy_exim_dict)
         {
-        PyObject *module = Py_InitModule(expy_exim_module, expy_exim_methods); /* Borrowed reference */
+        PyObject *module = Py_InitModule((const char *)expy_exim_module, expy_exim_methods); /* Borrowed reference */
         Py_INCREF(module);                                 /* convert to New reference */
         expy_exim_dict = PyModule_GetDict(module);         /* Borrowed reference */
         Py_INCREF(expy_exim_dict);                         /* convert to New reference */
@@ -613,8 +619,8 @@ int local_scan(int fd, uschar **return_text)
             if (!sys_module)
                 {
                 PyErr_Clear();
-                *return_text = "Internal error, can't import Python sys module";
-                log_write(0, LOG_REJECT, "Couldn't import Python 'sys' module");
+                *return_text = (uschar *)"Internal error";
+                log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
                 /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
@@ -625,13 +631,13 @@ int local_scan(int fd, uschar **return_text)
             if (!sys_path || (!PyList_Check(sys_path)))
                 {
                 PyErr_Clear();  /* in case sys_path was NULL, harmless otherwise */
-                *return_text = "Internal error, sys.path doesn't exist or isn't a list";
-                log_write(0, LOG_REJECT, "expy: Python sys.path doesn't exist or isn't a list");
+                *return_text = (uschar *)"Internal error";
+                log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
                 /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
 
-            add_value = PyString_FromString(expy_path_add);  /* New reference */
+            add_value = PyString_FromString((const char *)expy_path_add);  /* New reference */
             if (!add_value)
                 {
                 PyErr_Clear();
@@ -650,25 +656,25 @@ int local_scan(int fd, uschar **return_text)
             Py_DECREF(sys_module);
             }
 
-        expy_user_module = PyImport_ImportModule(expy_scan_module);  /* New Reference */
+        expy_user_module = PyImport_ImportModule((const char *)expy_scan_module);  /* New Reference */
 
         if (!expy_user_module)
             {
             PyErr_Clear();
-            *return_text = "Internal error, can't import Python local_scan module";
-            log_write(0, LOG_REJECT, "Couldn't import Python '%s' module", expy_scan_module);
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "Couldn't import Python '%s' module", expy_scan_module);
             return PYTHON_FAILURE_RETURN;
             }
         }
 
     user_dict = PyModule_GetDict(expy_user_module);                      /* Borrowed Reference, never fails */
-    user_func = PyMapping_GetItemString(user_dict, expy_scan_function);  /* New reference */
+    user_func = PyMapping_GetItemString(user_dict, (char *)expy_scan_function);  /* New reference */
 
     if (!user_func)
         {
         PyErr_Clear();
-        *return_text = "Internal error, module doesn't have local_scan function";
-        log_write(0, LOG_REJECT, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function);
+        *return_text = (uschar *)"Internal error";
+        log_write(0, LOG_PANIC, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function);
         return PYTHON_FAILURE_RETURN;
         }
 
@@ -728,7 +734,8 @@ int local_scan(int fd, uschar **return_text)
     if (!result)
         {
         PyErr_Clear();
-        *return_text = "Internal error, local_scan function failed";
+        *return_text = (uschar *)"Internal error";
+        log_write(0, LOG_PANIC, "local_scan function failed");
         Py_DECREF(original_recipients);
         clear_headers(header_tuple);
         Py_DECREF(header_tuple);
@@ -746,12 +753,12 @@ int local_scan(int fd, uschar **return_text)
      * Python code is done
      */
     if ((!working_recipients) || (!PySequence_Check(working_recipients)) || (PySequence_Size(working_recipients) == 0))
-        /* Python code either deleted exim.recipients alltogether, or replaced
+        /* Python code either deleted exim.recipients altogether, or replaced
            it with a non-list, or emptied out the list */
         recipients_count = 0;
     else
         {
-        int i;
+        Py_ssize_t i;
 
         /* remove original recipients not on the working list, reverse order important! */
         for (i = recipients_count - 1; i >= 0; i--)
@@ -766,7 +773,7 @@ int local_scan(int fd, uschar **return_text)
             {
             PyObject *addr = PySequence_GetItem(working_recipients, i);
             if (!PySequence_Contains(original_recipients, addr))
-                receive_add_recipient(PyString_AsString(addr), -1);
+                receive_add_recipient((uschar *)PyString_AsString(addr), -1);
             Py_DECREF(addr);
             }
         }
@@ -790,7 +797,7 @@ int local_scan(int fd, uschar **return_text)
             PyObject *obj = PySequence_GetItem(result, 1);   /* New reference */
             str = PyObject_Str(obj);                         /* New reference */
 
-            *return_text = string_copy(PyString_AsString(str));
+            *return_text = string_copy((uschar *)PyString_AsString(str));
 
             Py_DECREF(obj);
             Py_DECREF(str);
@@ -811,8 +818,8 @@ int local_scan(int fd, uschar **return_text)
 
     /* didn't return anything usable */
     Py_DECREF(result);
-    *return_text = "Internal error, bad return code";
-    log_write(0, LOG_REJECT, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function);
+    *return_text = (uschar *)"Internal error";
+    log_write(0, LOG_PANIC, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function);
     return PYTHON_FAILURE_RETURN;
     }
 
