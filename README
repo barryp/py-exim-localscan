@@ -86,6 +86,14 @@ Exim 'configure' file, in the 'local_scan' section.
        Name of the function within your module that this
        software will try and execute to perform the local_scan.
 
+    expy_scan_failure
+
+       Type: string
+       Default: defer
+
+       Return code in case the local_scan functions fails. Possible values:
+       "accept", "defer", "deny".
+
 expy_path_add is probably the only one you'll really need. The others
 are handy if you don't care for their default values.
 

@@ -47,13 +47,14 @@ static uschar *expy_path_add = NULL;
 static uschar *expy_exim_module = US"exim";
 static uschar *expy_scan_module = US"exim_local_scan";
 static uschar *expy_scan_function = US"local_scan";
-#define PYTHON_FAILURE_RETURN   LOCAL_SCAN_ACCEPT
+static uschar *expy_scan_failure = US"defer";
 
 optionlist local_scan_options[] =
     {
     { "expy_enabled", opt_bool, &expy_enabled},
     { "expy_exim_module",  opt_stringptr, &expy_exim_module },
     { "expy_path_add",  opt_stringptr, &expy_path_add },
+    { "expy_scan_failure",  opt_stringptr, &expy_scan_failure},
     { "expy_scan_function",  opt_stringptr, &expy_scan_function },
     { "expy_scan_module",  opt_stringptr, &expy_scan_module },
     };
@@ -582,6 +583,7 @@ static void expy_remove_recipient(int n)
 
 int local_scan(int fd, uschar **return_text)
     {
+    int python_failure_return = LOCAL_SCAN_TEMPREJECT;
     PyObject *user_dict;
     PyObject *user_func;
     PyObject *result;
@@ -591,6 +593,13 @@ int local_scan(int fd, uschar **return_text)
 
     if (!expy_enabled)
         return LOCAL_SCAN_ACCEPT;
+
+    if (strcmpic(expy_scan_failure, US"accept") == 0)
+        python_failure_return = LOCAL_SCAN_ACCEPT;
+    else if (strcmpic(expy_scan_failure, US"defer") == 0)
+        python_failure_return = LOCAL_SCAN_TEMPREJECT;
+    else if (strcmpic(expy_scan_failure, US"deny") == 0)
+        python_failure_return = LOCAL_SCAN_REJECT;
 
     if (!Py_IsInitialized())  /* local_scan() may have already been run */
         {
@@ -622,7 +631,7 @@ int local_scan(int fd, uschar **return_text)
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
                 /* FIXME: write out an exception traceback if possible to Exim log */
-                return PYTHON_FAILURE_RETURN;
+                return python_failure_return;
                 }
 
             sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
@@ -634,7 +643,7 @@ int local_scan(int fd, uschar **return_text)
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
                 /* FIXME: write out an exception traceback if possible to Exim log */
-                return PYTHON_FAILURE_RETURN;
+                return python_failure_return;
                 }
 
             add_value = PyString_FromString((const char *)expy_path_add);  /* New reference */
@@ -642,7 +651,7 @@ int local_scan(int fd, uschar **return_text)
                 {
                 PyErr_Clear();
                 log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add);
-                return PYTHON_FAILURE_RETURN;
+                return python_failure_return;
                 }
 
             if (PyList_Append(sys_path, add_value))
@@ -663,7 +672,7 @@ int local_scan(int fd, uschar **return_text)
             PyErr_Clear();
             *return_text = (uschar *)"Internal error";
             log_write(0, LOG_PANIC, "Couldn't import Python '%s' module", expy_scan_module);
-            return PYTHON_FAILURE_RETURN;
+            return python_failure_return;
             }
         }
 
@@ -675,7 +684,7 @@ int local_scan(int fd, uschar **return_text)
         PyErr_Clear();
         *return_text = (uschar *)"Internal error";
         log_write(0, LOG_PANIC, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function);
-        return PYTHON_FAILURE_RETURN;
+        return python_failure_return;
         }
 
     /* so far so good, prepare to run function */
@@ -739,7 +748,7 @@ int local_scan(int fd, uschar **return_text)
         Py_DECREF(original_recipients);
         clear_headers(header_tuple);
         Py_DECREF(header_tuple);
-        return PYTHON_FAILURE_RETURN;
+        return python_failure_return;
 
         // FIXME: should write exception to exim log somehow
         }
@@ -820,7 +829,7 @@ int local_scan(int fd, uschar **return_text)
     Py_DECREF(result);
     *return_text = (uschar *)"Internal error";
     log_write(0, LOG_PANIC, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function);
-    return PYTHON_FAILURE_RETURN;
+    return python_failure_return;
     }
 
 
