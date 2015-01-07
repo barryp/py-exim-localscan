@@ -8,16 +8,16 @@
 #include <Python.h>
 #include "local_scan.h"
 
-/* ---- Settings controllable at runtime through Exim 'configure' file -------- 
- 
+/* ---- Settings controllable at runtime through Exim 'configure' file --------
+
  This local_scan module will act *somewhat* like this python-ish pseudocode:
-   
+
    try:
        if {expy_path_add}:
            import sys
            sys.path.append({expy_path_add})
 
-       import {expy_scan_module} 
+       import {expy_scan_module}
 
        rc = {expy_scan_module}.{expy_scan_function}()
 
@@ -31,7 +31,7 @@
    except:
        return_text = "some description of problem"
        return PYTHON_FAILURE_RETURN
-   
+
  And a do-nothing {expy_scan_module}.py file might look like:
 
    import {expy_exim_module}
@@ -48,7 +48,7 @@ static uschar *expy_scan_module = US"exim_local_scan";
 static uschar *expy_scan_function = US"local_scan";
 #define PYTHON_FAILURE_RETURN   LOCAL_SCAN_ACCEPT
 
-optionlist local_scan_options[] = 
+optionlist local_scan_options[] =
     {
     { "expy_enabled", opt_bool, &expy_enabled},
     { "expy_exim_module",  opt_stringptr, &expy_exim_module },
@@ -65,11 +65,11 @@ static PyObject *expy_exim_dict = NULL;
 static PyObject *expy_user_module = NULL;
 
 
-/* ------- Custom type for holding header lines ------ 
+/* ------- Custom type for holding header lines ------
 
   Basically an object with .text and .type attributes, only the
-  .type attribute is changable, and only to single-character 
-  values.  Usually it'd be '*' which Exim interprets as 
+  .type attribute is changable, and only to single-character
+  values.  Usually it'd be '*' which Exim interprets as
   meaning the line should be deleted.
 
   Also accessible for backwards compatibility as a sequence
@@ -146,7 +146,7 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
     }
 
 
-static PyTypeObject ExPy_Header_Line  = 
+static PyTypeObject ExPy_Header_Line  =
     {
     PyObject_HEAD_INIT(NULL)    /* Workaround problem with Cygwin/GCC, by setting to &PyType_Type at runtime */
     0,                          /*ob_size*/
@@ -177,8 +177,8 @@ PyObject * expy_create_header_line(header_line *p)
 /* ------- Helper functions for Module methods ------- */
 
 /*
- * Given a C string, make sure it's safe to pass to a 
- * printf-style function ('%' chars are escaped by doubling 
+ * Given a C string, make sure it's safe to pass to a
+ * printf-style function ('%' chars are escaped by doubling
  * them up.  Optionally, also make sure the string ends with a '\n'
  */
 static char *get_format_string(char *str, int need_newline)
@@ -189,7 +189,7 @@ static char *get_format_string(char *str, int need_newline)
     int percent_count;
     int len;
 
-    /* Count number of '%' characters in string, and get the total length while at it */ 
+    /* Count number of '%' characters in string, and get the total length while at it */
     for (p = str, percent_count = 0; *p; p++)
         if (*p == '%')
             percent_count++;
@@ -216,7 +216,7 @@ static char *get_format_string(char *str, int need_newline)
         *q = *p;
         if (*q == '%')
             {
-            q++;   
+            q++;
             *q = '%';
             }
         }
@@ -245,15 +245,15 @@ static PyObject *expy_expand_string(PyObject *self, PyObject *args)
 
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
- 
+
     result = expand_string(str);
-    
+
     if (!result)
         {
         PyErr_Format(PyExc_ValueError, "expansion [%s] failed: %s", str, expand_string_message);
         return NULL;
         }
-    
+
     return PyString_FromString(result);
     }
 
@@ -267,7 +267,7 @@ static PyObject *expy_header_add(PyObject *self, PyObject *args)
 
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
- 
+
     header_add(' ', get_format_string(str, 1));
 
     Py_INCREF(Py_None);
@@ -282,10 +282,10 @@ static PyObject *expy_log_write(PyObject *self, PyObject *args)
     {
     char *str;
     int which = LOG_MAIN;
-    
+
     if (!PyArg_ParseTuple(args, "s|i", &str, &which))
         return NULL;
- 
+
     log_write(0, which, get_format_string(str, 0));
 
     Py_INCREF(Py_None);
@@ -294,15 +294,15 @@ static PyObject *expy_log_write(PyObject *self, PyObject *args)
 
 /*
  * Print through Exim's debug_print() function, which does nothing if
- * Exim isn't in debugging mode. 
+ * Exim isn't in debugging mode.
  */
 static PyObject *expy_debug_print(PyObject *self, PyObject *args)
     {
     char *str;
-    
+
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
- 
+
     debug_printf(get_format_string(str, 0));
 
     Py_INCREF(Py_None);
@@ -464,7 +464,7 @@ static PyMethodDef expy_exim_methods[] =
 /* ------------  Helper Functions for local_scan ---------- */
 
 /*
- * Add a string to the module dictionary 
+ * Add a string to the module dictionary
  */
 static void expy_dict_string(char *key, uschar *val)
     {
@@ -483,12 +483,12 @@ static void expy_dict_string(char *key, uschar *val)
     }
 
 /*
- * Add an integer to the module dictionary 
+ * Add an integer to the module dictionary
  */
 static void expy_dict_int(char *key, int val)
     {
     PyObject *i;
-    
+
     i = PyInt_FromLong(val);
     PyDict_SetItemString(expy_exim_dict, key, i);
     Py_DECREF(i);
@@ -496,13 +496,13 @@ static void expy_dict_int(char *key, int val)
 
 /*
  * Convert Exim header linked-list to Python tuple
- * of header objects.  
+ * of header objects.
  *
  * Returns New reference
  */
 static PyObject *get_headers()
     {
-    int header_count;  
+    int header_count;
     header_line *p;
     PyObject *result;
 
@@ -525,7 +525,7 @@ static PyObject *get_headers()
  * Given the header tuple created by get_headers(), go through
  * and set the header objects to point to NULL, in case someone
  * tries to re-use them after a message is done being processed, and
- * the underlying header strings are no longer available 
+ * the underlying header strings are no longer available
  */
 static void clear_headers(PyObject *header_tuple)
     {
@@ -614,7 +614,7 @@ int local_scan(int fd, uschar **return_text)
                 {
                 PyErr_Clear();
                 *return_text = "Internal error, can't import Python sys module";
-                log_write(0, LOG_REJECT, "Couldn't import Python 'sys' module"); 
+                log_write(0, LOG_REJECT, "Couldn't import Python 'sys' module");
                 /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
@@ -626,7 +626,7 @@ int local_scan(int fd, uschar **return_text)
                 {
                 PyErr_Clear();  /* in case sys_path was NULL, harmless otherwise */
                 *return_text = "Internal error, sys.path doesn't exist or isn't a list";
-                log_write(0, LOG_REJECT, "expy: Python sys.path doesn't exist or isn't a list"); 
+                log_write(0, LOG_REJECT, "expy: Python sys.path doesn't exist or isn't a list");
                 /* FIXME: write out an exception traceback if possible to Exim log */
                 return PYTHON_FAILURE_RETURN;
                 }
@@ -635,14 +635,14 @@ int local_scan(int fd, uschar **return_text)
             if (!add_value)
                 {
                 PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add); 
+                log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add);
                 return PYTHON_FAILURE_RETURN;
                 }
 
             if (PyList_Append(sys_path, add_value))
                 {
                 PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);                
+                log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);
                 }
 
             Py_DECREF(add_value);
@@ -656,7 +656,7 @@ int local_scan(int fd, uschar **return_text)
             {
             PyErr_Clear();
             *return_text = "Internal error, can't import Python local_scan module";
-            log_write(0, LOG_REJECT, "Couldn't import Python '%s' module", expy_scan_module); 
+            log_write(0, LOG_REJECT, "Couldn't import Python '%s' module", expy_scan_module);
             return PYTHON_FAILURE_RETURN;
             }
         }
@@ -668,7 +668,7 @@ int local_scan(int fd, uschar **return_text)
         {
         PyErr_Clear();
         *return_text = "Internal error, module doesn't have local_scan function";
-        log_write(0, LOG_REJECT, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function); 
+        log_write(0, LOG_REJECT, "Python %s module doesn't have a %s function", expy_scan_module, expy_scan_function);
         return PYTHON_FAILURE_RETURN;
         }
 
@@ -692,7 +692,7 @@ int local_scan(int fd, uschar **return_text)
     expy_dict_int("LOG_MAIN", LOG_MAIN);
     expy_dict_int("LOG_PANIC", LOG_PANIC);
     expy_dict_int("LOG_REJECT", LOG_REJECT);
-    
+
     expy_dict_int("LOCAL_SCAN_ACCEPT", LOCAL_SCAN_ACCEPT);
     expy_dict_int("LOCAL_SCAN_ACCEPT_FREEZE", LOCAL_SCAN_ACCEPT_FREEZE);
     expy_dict_int("LOCAL_SCAN_ACCEPT_QUEUE", LOCAL_SCAN_ACCEPT_QUEUE);
@@ -710,19 +710,19 @@ int local_scan(int fd, uschar **return_text)
     header_tuple = get_headers();
     PyDict_SetItemString(expy_exim_dict, "headers", header_tuple);
 
-    /* 
-     * make list of recipients, give module a copy to work with in 
+    /*
+     * make list of recipients, give module a copy to work with in
      * List format, but keep original tuple to compare against later
      */
     original_recipients = get_recipients();                     /* New reference */
     working_recipients = PySequence_List(original_recipients);  /* New reference */
     PyDict_SetItemString(expy_exim_dict, "recipients", working_recipients);
-    Py_DECREF(working_recipients);    
+    Py_DECREF(working_recipients);
 
     /* Try calling our function */
     result = PyObject_CallFunction(user_func, NULL);            /* New reference */
 
-    Py_DECREF(user_func);  /* Don't need ref to function anymore */      
+    Py_DECREF(user_func);  /* Don't need ref to function anymore */
 
     /* Check for Python exception */
     if (!result)
@@ -741,16 +741,16 @@ int local_scan(int fd, uschar **return_text)
     working_recipients = PyDict_GetItemString(expy_exim_dict, "recipients"); /* Borrowed reference */
     Py_XINCREF(working_recipients);                                           /* convert to New reference */
 
-    /* 
-     * reconcile original recipient list with what's present after 
-     * Python code is done 
+    /*
+     * reconcile original recipient list with what's present after
+     * Python code is done
      */
     if ((!working_recipients) || (!PySequence_Check(working_recipients)) || (PySequence_Size(working_recipients) == 0))
-        /* Python code either deleted exim.recipients alltogether, or replaced 
+        /* Python code either deleted exim.recipients alltogether, or replaced
            it with a non-list, or emptied out the list */
         recipients_count = 0;
     else
-        {        
+        {
         int i;
 
         /* remove original recipients not on the working list, reverse order important! */
@@ -812,7 +812,7 @@ int local_scan(int fd, uschar **return_text)
     /* didn't return anything usable */
     Py_DECREF(result);
     *return_text = "Internal error, bad return code";
-    log_write(0, LOG_REJECT, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function); 
+    log_write(0, LOG_REJECT, "Python %s.%s function didn't return integer", expy_scan_module, expy_scan_function);
     return PYTHON_FAILURE_RETURN;
     }
 
