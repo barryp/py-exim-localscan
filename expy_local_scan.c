@@ -581,6 +581,59 @@ static void expy_remove_recipient(int n)
 
 /* ----------- Actual local_scan function ------------ */
 
+char* getPythonTraceback()
+{
+    /* Python equivalent:
+
+       import traceback, sys
+       return "".join(traceback.format_exception(sys.exc_type,
+                                                 sys.exc_value,
+                                                 sys.exc_traceback))
+    */
+
+    PyObject *type, *value, *traceback;
+    PyObject *tracebackModule;
+    char *chrRetval;
+
+    PyErr_Fetch(&type, &value, &traceback);
+
+    tracebackModule = PyImport_ImportModule("traceback");
+    if (tracebackModule != NULL)
+    {
+        PyObject *tbList, *emptyString, *strRetval;
+
+        tbList = PyObject_CallMethod(
+            tracebackModule,
+            "format_exception",
+            "OOO",
+            type,
+            value == NULL ? Py_None : value,
+            traceback == NULL ? Py_None : traceback);
+
+        emptyString = PyString_FromString("");
+        strRetval = PyObject_CallMethod(emptyString, "join",
+            "O", tbList);
+
+        chrRetval = strdup(PyString_AsString(strRetval));
+
+        Py_DECREF(tbList);
+        Py_DECREF(emptyString);
+        Py_DECREF(strRetval);
+        Py_DECREF(tracebackModule);
+    }
+    else
+    {
+        chrRetval = strdup("Unable to import traceback module.");
+    }
+
+    Py_DECREF(type);
+    Py_XDECREF(value);
+    Py_XDECREF(traceback);
+
+    return chrRetval;
+}
+
+
 int local_scan(int fd, uschar **return_text)
     {
     int python_failure_return = LOCAL_SCAN_TEMPREJECT;
@@ -627,10 +680,9 @@ int local_scan(int fd, uschar **return_text)
             sys_module = PyImport_ImportModule("sys");  /* New Reference */
             if (!sys_module)
                 {
-                PyErr_Clear();
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
-                /* FIXME: write out an exception traceback if possible to Exim log */
+                log_write(0, LOG_PANIC, getPythonTraceback());
                 return python_failure_return;
                 }
 
@@ -639,10 +691,9 @@ int local_scan(int fd, uschar **return_text)
 
             if (!sys_path || (!PyList_Check(sys_path)))
                 {
-                PyErr_Clear();  /* in case sys_path was NULL, harmless otherwise */
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
-                /* FIXME: write out an exception traceback if possible to Exim log */
+                log_write(0, LOG_PANIC, getPythonTraceback());
                 return python_failure_return;
                 }
 
@@ -742,15 +793,13 @@ int local_scan(int fd, uschar **return_text)
     /* Check for Python exception */
     if (!result)
         {
-        PyErr_Clear();
         *return_text = (uschar *)"Internal error";
         log_write(0, LOG_PANIC, "local_scan function failed");
+        log_write(0, LOG_PANIC, getPythonTraceback());
         Py_DECREF(original_recipients);
         clear_headers(header_tuple);
         Py_DECREF(header_tuple);
         return python_failure_return;
-
-        // FIXME: should write exception to exim log somehow
         }
 
     /* User code may have replaced recipient list, so re-get ref */
