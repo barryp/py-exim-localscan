@@ -293,7 +293,7 @@ static PyObject *expy_log_write(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s|i", &str, &which))
         return NULL;
 
-    log_write(0, which, get_format_string(str, 0));
+    log_write(0, which, "%s", get_format_string(str, 0));
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -310,7 +310,7 @@ static PyObject *expy_debug_print(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s", &str))
         return NULL;
 
-    debug_printf(get_format_string(str, 0));
+    debug_printf("%s", get_format_string(str, 0));
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -682,7 +682,7 @@ int local_scan(int fd, uschar **return_text)
                 {
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
-                log_write(0, LOG_PANIC, getPythonTraceback());
+                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
                 return python_failure_return;
                 }
 
@@ -693,7 +693,7 @@ int local_scan(int fd, uschar **return_text)
                 {
                 *return_text = (uschar *)"Internal error";
                 log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
-                log_write(0, LOG_PANIC, getPythonTraceback());
+                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
                 return python_failure_return;
                 }
 
@@ -795,7 +795,7 @@ int local_scan(int fd, uschar **return_text)
         {
         *return_text = (uschar *)"Internal error";
         log_write(0, LOG_PANIC, "local_scan function failed");
-        log_write(0, LOG_PANIC, getPythonTraceback());
+        log_write(0, LOG_PANIC, "%s", getPythonTraceback());
         Py_DECREF(original_recipients);
         clear_headers(header_tuple);
         Py_DECREF(header_tuple);
