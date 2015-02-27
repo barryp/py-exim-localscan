@@ -276,6 +276,8 @@ static PyObject *expy_header_add(PyObject *self, PyObject *args)
         return NULL;
 
     header_add(' ', get_format_string(str, 1));
+    PyList_Append(PyDict_GetItemString(expy_exim_dict, "headers"),
+                  expy_create_header_line(header_last));
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -502,27 +504,21 @@ static void expy_dict_int(char *key, int val)
     }
 
 /*
- * Convert Exim header linked-list to Python tuple
+ * Convert Exim header linked-list to Python list
  * of header objects.
  *
  * Returns New reference
  */
 static PyObject *get_headers()
     {
-    Py_ssize_t header_count;
     header_line *p;
     PyObject *result;
 
-    /* count number of header lines */
-    for (header_count = 0, p = header_list; p; p = p->next)
-        header_count++;
-
-    /* Build up the tuple of tuples */
-    result = PyTuple_New(header_count);           /* New reference */
-    for (header_count = 0, p = header_list; p; p = p->next)
+    /* Build up the list of tuples */
+    result = PyList_New(0);           /* New reference */
+    for (p = header_list; p; p = p->next)
         {
-        PyTuple_SetItem(result, header_count, expy_create_header_line(p));   /* Steals new reference */
-        header_count++;
+        PyList_Append(result, expy_create_header_line(p));   /* Steals new reference */
         }
 
     return result;
@@ -534,16 +530,16 @@ static PyObject *get_headers()
  * tries to re-use them after a message is done being processed, and
  * the underlying header strings are no longer available
  */
-static void clear_headers(PyObject *header_tuple)
+static void clear_headers(PyObject *exim_headers)
     {
-    Py_ssize_t i, n;
+    int i, n;
 
-    n = PyTuple_Size(header_tuple);
+    n = PyList_Size(exim_headers);
     for (i = 0; i < n; i++)
         {
         expy_header_line_t *p;
 
-        p = (expy_header_line_t *) PyTuple_GetItem(header_tuple, i); /* Borrowed reference */
+        p = (expy_header_line_t *) PyList_GetItem(exim_headers, i); /* Borrowed reference */
         p->hline = NULL;
         }
 
@@ -640,7 +636,7 @@ int local_scan(int fd, uschar **return_text)
     PyObject *user_dict;
     PyObject *user_func;
     PyObject *result;
-    PyObject *header_tuple;
+    PyObject *exim_headers;
     PyObject *original_recipients;
     PyObject *working_recipients;
 
@@ -773,8 +769,8 @@ int local_scan(int fd, uschar **return_text)
     expy_dict_int("D_local_scan", D_local_scan);
 
     /* set the headers */
-    header_tuple = get_headers();
-    PyDict_SetItemString(expy_exim_dict, "headers", header_tuple);
+    exim_headers = get_headers();
+    PyDict_SetItemString(expy_exim_dict, "headers", exim_headers);
 
     /*
      * make list of recipients, give module a copy to work with in
@@ -797,8 +793,8 @@ int local_scan(int fd, uschar **return_text)
         log_write(0, LOG_PANIC, "local_scan function failed");
         log_write(0, LOG_PANIC, "%s", getPythonTraceback());
         Py_DECREF(original_recipients);
-        clear_headers(header_tuple);
-        Py_DECREF(header_tuple);
+        clear_headers(exim_headers);
+        Py_DECREF(exim_headers);
         return python_failure_return;
         }
 
@@ -839,8 +835,8 @@ int local_scan(int fd, uschar **return_text)
     Py_XDECREF(working_recipients);   /* No longer needed */
     Py_DECREF(original_recipients);   /* No longer needed */
 
-    clear_headers(header_tuple);
-    Py_DECREF(header_tuple);          /* No longer needed */
+    clear_headers(exim_headers);
+    Py_DECREF(exim_headers);          /* No longer needed */
 
     /* Deal with the return value, first see if python returned a non-empty sequence */
     if (PySequence_Check(result) && (PySequence_Size(result) > 0))
