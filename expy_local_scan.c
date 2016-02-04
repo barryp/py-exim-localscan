@@ -652,6 +652,13 @@ int local_scan(int fd, uschar **return_text)
 
     if (!Py_IsInitialized())  /* local_scan() may have already been run */
         {
+        /* It is definitely cleanest to set a program name here. 
+        However, it's not really clear *what* name to use. In many ways,
+        Exim would be most accurate, but that will not necessarily be the
+        starting location for finding libraries that is wanted.
+        Hard-coding /usr/local/ here is SE specific, and something more
+        generic would need to be used to submit this upstream. */
+        Py_SetProgramName("/usr/local/bin/python");
         Py_Initialize();
         ExPy_Header_Line.ob_type = &PyType_Type;
         }
