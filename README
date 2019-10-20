@@ -86,6 +86,14 @@ Exim 'configure' file, in the 'local_scan' section.
        Name of the function within your module that this
        software will try and execute to perform the local_scan.
 
+    expy_scan_failure
+
+       Type: string
+       Default: defer
+
+       Return code in case the local_scan functions fails. Possible values:
+       "accept", "defer", "deny".
+
 expy_path_add is probably the only one you'll really need. The others
 are handy if you don't care for their default values.
 
@@ -188,6 +196,26 @@ altered for Python)
                 exim.log('Rejected by Python', exim.LOG_REJECT)
                 exim.log("We're freaking out here!', exim.LOG_PANIC)
 
+        child_open(argv, envp, umask[, make_leader=False]):
+
+           Create a child process that runs the command specified.
+           "argv" and "envp" must be tuples of strings.
+
+           The return value is (stdout, stdin, pid), where stdout and stdin are
+           file descriptors to the appropriate pipes (stderr is joined with
+           stdout). The environment may be specified, and a new umask supplied.
+
+        child_open_exim(message[, sender="", sender_authentication=None])
+
+           Submit a new message to Exim, returning the PID of the subprocess.
+           Essentially, this is running 'exim -t -oem -oi -f sender -oMas auth'
+           (-oMas is omitted if no authentication is provided).
+
+        child_close(pid[, timeout=0])
+
+           Wait for a child process to terminate, or for a timeout (in seconds)
+           to expire. A timeout of zero (the default) means wait as long as it
+           takes. The return value is the process ending status.
 
     Constants
     ----------
