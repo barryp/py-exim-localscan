@@ -9,6 +9,9 @@
 #include <Python.h>
 #include "local_scan.h"
 
+/* Function declaration lifted from Exim src/functions.h - including the whole thing causes problems */
+extern int     strcmpic(const uschar *, const uschar *);
+
 /* ---- Settings controllable at runtime through Exim 'configure' file --------
 
  This local_scan module will act *somewhat* like this python-ish pseudocode:
@@ -684,13 +687,13 @@ local_scan(int fd, uschar **return_text)
         return LOCAL_SCAN_ACCEPT;
     }
 
-    if (strcmpic(expy_scan_failure, US { "accept" }) == 0) {
+    if (strcmpic(expy_scan_failure, US"accept") == 0) {
         python_failure_return = LOCAL_SCAN_ACCEPT;
     }
-    else if (strcmpic(expy_scan_failure, US { "defer" }) == 0) {
+    else if (strcmpic(expy_scan_failure, US"defer") == 0) {
         python_failure_return = LOCAL_SCAN_TEMPREJECT;
     }
-    else if (strcmpic(expy_scan_failure, US { "deny" }) == 0) {
+    else if (strcmpic(expy_scan_failure, US"deny") == 0) {
         python_failure_return = LOCAL_SCAN_REJECT;
     }
 

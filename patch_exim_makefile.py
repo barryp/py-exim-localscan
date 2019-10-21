@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 """
 Attempt to figure out what options need to be added to the Exim
 Makefile to embed a Python interpreter for your particular platform.
@@ -28,6 +28,7 @@ def patch_makefile(source_dir, build_dir):
     extralibs = '%s -lpython%s' % (cfg('LDFLAGS'), cfg('VERSION'))
     source = os.path.join('Local', SOURCE_FILE)
     has_options = True
+    have_local_scan = True
 
     #
     # Look for existing CFLAGS and EXTRALIBS lines, and append info.
@@ -43,6 +44,9 @@ def patch_makefile(source_dir, build_dir):
         if makefile[i].startswith('EXTRALIBS=') and extralibs:
             makefile[i] = makefile[i].rstrip() + ' ' + extralibs + '\n'
             extralibs = None
+        if makefile[i].startswith('HAVE_LOCAL_SCAN='):
+            makefile[i] = 'HAVE_LOCAL_SCAN=yes\n'
+            have_local_scan = False
         if makefile[i].startswith('LOCAL_SCAN_SOURCE='):
             makefile[i] = 'LOCAL_SCAN_SOURCE=' + source + '\n'
             source = None
@@ -57,6 +61,8 @@ def patch_makefile(source_dir, build_dir):
         makefile.append('CFLAGS=%s\n' % cflags)
     if extralibs:
         makefile.append('EXTRALIBS=%s\n' % extralibs)
+    if have_local_scan:
+        makefile.append('HAVE_LOCAL_SCAN=yes\n')
     if source:
         makefile.append('LOCAL_SCAN_SOURCE=%s\n' % source)
     if has_options:
@@ -67,6 +73,8 @@ def patch_makefile(source_dir, build_dir):
     #
     makefile = ''.join(makefile)
     open(makefile_name, 'w').write(makefile)
+    print 'py-exim-localscan patched:', makefile_name
+    print ''
 
     #
     # Symlink in C sourcefile

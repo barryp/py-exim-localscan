@@ -14,11 +14,16 @@ this distribution was unpacked into /home/barryp/py-exim-localscan-4.63.0
 -----------------
   cd /usr/ports/mail/exim
 
-  make WITHOUT_PERL=yes configure
+  make configure
 
-  /home/barryp/py-exim-localscan-4.63.0/patch_exim_makefile.py work/exim-4.63
+  /root/py-exim-localscan/patch_exim_makefile.py /var/ports/usr/ports/mail/exim/work/exim-4.91
 
-  make WITHOUT_PERL=yes install
+  make
+
+  # if it all seems good
+  #
+  make deinstall
+  make reinstall
 -----------------
 
 Watch Exim compile, keep an eye out for errors, especially link
