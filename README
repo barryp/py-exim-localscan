@@ -301,7 +301,7 @@ altered for Python)
 
         headers
 
-            A tuple of header_line objects.  Each header_line object has two 
+            A list of header_line objects.  Each header_line object has two
             attributes: '.text', and '.type'.  
 
             The .text attribute is the entire text of the header line, which 
@@ -319,8 +319,9 @@ altered for Python)
                     if h.type != '*' and h.text.lower().startswith('x-spam'):
                         h.type = '*'
 
-            Use the add_header() function (see above) to add new header lines, although
-            you won't see them appear in this tuple.
+            IMPORTANT! Do not manipulate this list directly - if you do so the changes
+            won't be reflected back into Exim.  Use the add_header() function (see above)
+            to add new header lines, and set the type to '*' to delete lines.
 
         host_checking       (an integer)
         
