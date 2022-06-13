@@ -569,6 +569,14 @@ char *getPythonTraceback() {
 	return chrRetval;
 }
 
+static struct PyModuleDef expyEximModule = {
+	PyModuleDef_HEAD_INIT,
+	"exim",										/* name of module */
+	"Module docs",								/* module documentation, may be NULL */
+	-1,											/* size of per-interpreter state of the module, or -1 if the module keeps state in */
+	expy_exim_methods, NULL, NULL, NULL, NULL	/* global variables. */
+};
+
 int local_scan(int fd, uschar ** return_text) {
 	int python_failure_return = LOCAL_SCAN_TEMPREJECT;
 	PyObject *user_dict;
@@ -577,6 +585,9 @@ int local_scan(int fd, uschar ** return_text) {
 	PyObject *exim_headers;
 	PyObject *original_recipients;
 	PyObject *working_recipients;
+
+	// const char * PyModuleDef.m_name
+	expyEximModule.m_name = (const char *)expy_exim_module;
 
 	if (!expy_enabled)
 		return LOCAL_SCAN_ACCEPT;
@@ -588,6 +599,9 @@ int local_scan(int fd, uschar ** return_text) {
 	else if (strcmpic(expy_scan_failure, US "deny") == 0)
 		python_failure_return = LOCAL_SCAN_REJECT;
 
+	PyMODINIT_FUNC PyInit_exim(void) {
+		return PyModule_Create(&expyEximModule);
+	}
 
 	if (!Py_IsInitialized()) {	/* local_scan() may have already been run */
 		/*
@@ -600,6 +614,7 @@ int local_scan(int fd, uschar ** return_text) {
 		Py_SetProgramName((const wchar_t *)expy_scan_python);
 		PyImport_AppendInittab((const char *)expy_exim_module, &PyInit_exim);
 		Py_Initialize();
+		Py_TYPE(&ExPy_Header_Line) = &PyType_Type;
 	}
 
 	if (!expy_exim_dict) {
@@ -637,6 +652,7 @@ int local_scan(int fd, uschar ** return_text) {
 			}
 
 			sys_dict = PyModule_GetDict(sys_module);	/* Borrowed Reference, never fails */
+			sys_path = PyObject_GetAttrString(sys_module, "path");	/* New reference */
 
 			if (!sys_path) {
 				*return_text = (uschar *) "Internal error";
