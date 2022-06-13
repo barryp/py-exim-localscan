@@ -97,9 +97,11 @@ static PyObject *expy_header_line_getattr(expy_header_line_t * self, char *name)
 	}
 
 	if (!strcmp(name, "text"))
+		return PyUnicode_FromString((const char *)self->hline->text);
 
 	if (!strcmp(name, "type")) {
 		char ch = (char)(self->hline->type);
+		return PyUnicode_FromStringAndSize(&ch, 1);
 	}
 
 	PyErr_Format(PyExc_AttributeError, "Unknown attribute: %s", name);
@@ -120,6 +122,7 @@ static int expy_header_line_setattr(expy_header_line_t * self, char *name, PyObj
 #else
 		Py_ssize_t len;
 #endif
+		if (PyBytes_AsStringAndSize(value, &p, &len) == -1) {
 			return -1;
 		}
 		if (len != 1) {
@@ -235,6 +238,7 @@ static PyObject *expy_expand_string(PyObject * self, PyObject * args) {
 		PyErr_Format(PyExc_ValueError, "expansion [%s] failed: %s", str, expand_string_message);
 		return NULL;
 	}
+	return PyUnicode_FromString((const char *)result);
 }
 
 /*
@@ -373,6 +377,7 @@ static PyObject *expy_child_close(PyObject * self, PyObject * args) {
 		return NULL;
 	}
 
+	return PyLong_FromLong(result);
 }
 
 /*
@@ -407,6 +412,7 @@ static PyObject *expy_child_open_exim(PyObject * self, PyObject * args) {
 		return NULL;
 	}
 	close(fd);
+	return PyLong_FromLong(exim_pid);
 }
 
 static PyMethodDef expy_exim_methods[] = {
@@ -431,6 +437,7 @@ static void expy_dict_string(char *key, uschar * val) {
 	PyObject *s;
 
 	if (val)
+		s = PyUnicode_FromString((const char *)val);
 	else {
 		s = Py_None;
 		Py_INCREF(s);
@@ -446,6 +453,7 @@ static void expy_dict_string(char *key, uschar * val) {
 static void expy_dict_int(char *key, int val) {
 	PyObject *i;
 
+	i = PyLong_FromLong(val);
 	PyDict_SetItemString(expy_exim_dict, key, i);
 	Py_DECREF(i);
 }
@@ -539,8 +547,10 @@ char *getPythonTraceback() {
 									 "OOO",
 									 type, value == NULL ? Py_None : value, traceback == NULL ? Py_None : traceback);
 
+		emptyString = PyUnicode_FromString("");
 		strRetval = PyObject_CallMethod(emptyString, "join", "O", tbList);
 
+		chrRetval = strdup(PyBytes_AsString(strRetval));
 
 		Py_DECREF(tbList);
 		Py_DECREF(emptyString);
@@ -768,6 +778,7 @@ int local_scan(int fd, uschar ** return_text) {
 		for (i = PySequence_Size(working_recipients) - 1; i >= 0; i--) {
 			PyObject *addr = PySequence_GetItem(working_recipients, i);
 			if (!PySequence_Contains(original_recipients, addr)) {
+				receive_add_recipient((uschar *) PyBytes_AsString(addr), -1);
 			}
 			Py_DECREF(addr);
 		}
@@ -790,6 +801,7 @@ int local_scan(int fd, uschar ** return_text) {
 			PyObject *obj = PySequence_GetItem(result, 1);	/* New reference */
 			str = PyObject_Str(obj);	/* New reference */
 
+			*return_text = string_copy((uschar *) PyBytes_AsString(str));
 			log_write(0, LOG_PANIC, "More than one item:  %s ", str);
 
 			Py_DECREF(obj);
@@ -803,6 +815,7 @@ int local_scan(int fd, uschar ** return_text) {
 
 	/* If we have an integer, return that to Exim */
 	if (PyLong_Check(result)) {
+		int rc = PyLong_AsLong(result);
 		Py_DECREF(result);
 		return rc;
 	}
