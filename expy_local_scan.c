@@ -49,6 +49,7 @@ static uschar *expy_exim_module = US "exim";
 static uschar *expy_scan_module = US "exim_local_scan";
 static uschar *expy_scan_function = US "local_scan";
 static uschar *expy_scan_failure = US "defer";
+static uschar *expy_scan_python = US "/usr/bin/python3.9";
 
 optionlist local_scan_options[] = {
 	{"expy_enabled", opt_bool, &expy_enabled},
@@ -57,6 +58,7 @@ optionlist local_scan_options[] = {
 	{"expy_scan_failure", opt_stringptr, &expy_scan_failure},
 	{"expy_scan_function", opt_stringptr, &expy_scan_function},
 	{"expy_scan_module", opt_stringptr, &expy_scan_module},
+	{"expy_scan_python", opt_stringptr, &expy_scan_python},
 };
 
 int local_scan_options_count = sizeof(local_scan_options) / sizeof(optionlist);
@@ -72,6 +74,7 @@ static PyObject *expy_user_module = NULL;
    Basically an object with .text and .type attributes, only the
    .type attribute is changable, and only to single-character
    values.  Usually it'd be '*' which Exim interprets as
+
    meaning the line should be deleted.
 
    Also accessible for backwards compatibility as a sequence
@@ -581,6 +584,9 @@ int local_scan(int fd, uschar ** return_text) {
 		 * libraries that is wanted. Hard-coding /usr/local/ here is SE specific, and something more generic would need
 		 * to be used to submit this upstream.
 		 */
+
+		Py_SetProgramName((const wchar_t *)expy_scan_python);
+		PyImport_AppendInittab((const char *)expy_exim_module, &PyInit_exim);
 		Py_Initialize();
 	}
 
