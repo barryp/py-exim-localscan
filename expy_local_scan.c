@@ -139,10 +139,12 @@ static int expy_header_line_setattr(expy_header_line_t * self, char *name, PyObj
 }
 
 static PyTypeObject ExPy_Header_Line = {
+	PyVarObject_HEAD_INIT(NULL, 0)
 	"ExPy Header Line",						/* tp_name */
 	sizeof(expy_header_line_t),				/* tp_basicsize */
 	0,										/* tp_itemsize */
 	expy_header_line_dealloc,				/* tp_dealloc */
+	0,										/* tp_vectorcall_offset */
 	(getattrfunc) expy_header_line_getattr,	/* tp_getattr */
 	(setattrfunc) expy_header_line_setattr,	/* tp_setattr */
 };
