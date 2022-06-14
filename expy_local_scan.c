@@ -577,6 +577,7 @@ static struct PyModuleDef expyEximModule = {
 	expy_exim_methods, NULL, NULL, NULL, NULL	/* global variables. */
 };
 
+
 int local_scan(int fd, uschar ** return_text) {
 	int python_failure_return = LOCAL_SCAN_TEMPREJECT;
 	PyObject *user_dict;
@@ -585,6 +586,8 @@ int local_scan(int fd, uschar ** return_text) {
 	PyObject *exim_headers;
 	PyObject *original_recipients;
 	PyObject *working_recipients;
+	PyStatus status;
+	PyConfig pythonConfig;
 
 	// const char * PyModuleDef.m_name
 	expyEximModule.m_name = (const char *)expy_exim_module;
@@ -611,9 +614,62 @@ int local_scan(int fd, uschar ** return_text) {
 		 * to be used to submit this upstream.
 		 */
 
-		Py_SetProgramName((const wchar_t *)expy_scan_python);
+		wchar_t *python_binary = Py_DecodeLocale(expy_scan_python, NULL);
+		Py_SetProgramName((const wchar_t *)python_binary);
+
+		PyConfig_InitPythonConfig(&pythonConfig);
+
+		status = PyConfig_Read(&pythonConfig);
+		if (PyStatus_Exception(status)) {
+			*return_text = (uschar *) "Internal error";
+			log_write(0, LOG_PANIC, "Couldn't not read the Python configuration");
+			PyErr_Print();
+			PyConfig_Clear(&pythonConfig);
+			return python_failure_return;
+		}
+
+		status = PyWideStringList_Append(&pythonConfig.module_search_paths, L"/usr/lib64/python3.9");
+		if (PyStatus_Exception(status)) {
+			*return_text = (uschar *) "Internal error";
+			log_write(0, LOG_PANIC, "Couldn't set python's internal libraries in /usr/lib64/python3.9");
+			PyErr_Print();
+			PyConfig_Clear(&pythonConfig);
+			return python_failure_return;
+		}
+
+		status = PyWideStringList_Append(&pythonConfig.module_search_paths, L"/usr/lib64/python3.9/lib-dynload/");
+		if (PyStatus_Exception(status)) {
+			*return_text = (uschar *) "Internal error";
+			log_write(0, LOG_PANIC, "Couldn't set python's internal linked libraries in /usr/lib64/python3.9/lib-dynload");
+			PyErr_Print();
+			PyConfig_Clear(&pythonConfig);
+			return python_failure_return;
+		}
+
+		if (expy_path_add) {
+			wchar_t *python_location_func = Py_DecodeLocale(expy_path_add, NULL);
+			status = PyWideStringList_Append(&pythonConfig.module_search_paths, (const wchar_t *)python_location_func);
+			if (PyStatus_Exception(status)) {
+				*return_text = (uschar *) "Internal error";
+				log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);
+				PyErr_Print();
+				PyConfig_Clear(&pythonConfig);
+				return python_failure_return;
+			}
+		}
+
 		PyImport_AppendInittab((const char *)expy_exim_module, &PyInit_exim);
-		Py_Initialize();
+
+		status = Py_InitializeFromConfig(&pythonConfig);
+		if (PyStatus_Exception(status)) {
+			*return_text = (uschar *) "Internal error";
+			log_write(0, LOG_PANIC, "Could not initialize python configuration");
+			PyErr_Print();
+			PyConfig_Clear(&pythonConfig);
+			return python_failure_return;
+		}
+
+		PyConfig_Clear(&pythonConfig);
 		Py_TYPE(&ExPy_Header_Line) = &PyType_Type;
 	}
 
@@ -637,47 +693,6 @@ int local_scan(int fd, uschar ** return_text) {
 	}
 
 	if (!expy_user_module) {
-		if (expy_path_add) {
-			PyObject *sys_module;
-			PyObject *sys_dict;
-			PyObject *sys_path;
-			PyObject *add_value;
-
-			sys_module = PyImport_ImportModule("sys");	/* New Reference */
-			if (!sys_module) {
-				*return_text = (uschar *) "Internal error";
-				log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
-				PyErr_Print();
-				return python_failure_return;
-			}
-
-			sys_dict = PyModule_GetDict(sys_module);	/* Borrowed Reference, never fails */
-			sys_path = PyObject_GetAttrString(sys_module, "path");	/* New reference */
-
-			if (!sys_path) {
-				*return_text = (uschar *) "Internal error";
-				log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
-				PyErr_Print();
-				return python_failure_return;
-			}
-
-			add_value = PyUnicode_FromString((const char *)expy_path_add);	/* New reference */
-
-			if (!add_value) {
-				log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add);
-				PyErr_Print();
-				return python_failure_return;
-			}
-
-			if (PyList_Append(sys_path, add_value)) {
-				log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);
-				PyErr_Print();
-			}
-
-			Py_DECREF(add_value);
-			Py_DECREF(sys_path);
-			Py_DECREF(sys_module);
-		}
 
 		expy_user_module = PyImport_ImportModule((const char *)expy_scan_module);	/* New Reference */
 
